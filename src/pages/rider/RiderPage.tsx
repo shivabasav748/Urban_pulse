@@ -58,7 +58,7 @@ function PlaceSearch({ label, recents, onPick, autoFocus }: { label: string; rec
           <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">Recent</p>
           <ul>{recentHits.slice(0, 4).map((p) => row(p, <Clock className="size-4" />))}</ul>
         </>}
-        <p className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">Demo places, Bengaluru (approximate)</p>
+        <p className="px-2 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">Demo places, Belagavi (from OpenStreetMap)</p>
         {hits.length ? <ul>{hits.map((p) => row(p, <MapPin className="size-4" />))}</ul>
           : <p className="px-2 py-3 text-sm text-muted-foreground">No demo place matches “{q}”. Try another name, or tap the map to drop a pin.</p>}
       </div>
@@ -167,7 +167,7 @@ export default function RiderPage() {
   const useMyLocation = async () => {
     const f = await geo.request()
     if (!f) return
-    if (!inDemoArea(f.lat, f.lng)) { toast.error("You're outside the Bengaluru demo area. Choose a pickup from the list."); return }
+    if (!inDemoArea(f.lat, f.lng)) { toast.error("You're outside the Belagavi demo area. Choose a pickup from the list."); return }
     setPickup(pointPlace(f.lat, f.lng, 'gps')); setField('drop')
   }
   const pick = (p: Place) => {

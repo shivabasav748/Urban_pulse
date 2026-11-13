@@ -4,7 +4,7 @@
 
 | Time | Action | Say |
 |---|---|---|
-| 0:00–0:35 | Rider: Koramangala → MG Road; categories show ETA + fare; Request | "Nearby drivers from a PostGIS query; ETA and fare are estimates; surge comes from the zone forecast." |
+| 0:00–0:35 | Rider: Rani Channamma Circle → Belagavi Railway Station; ride types show ETA + fare (about ₹31 bike / ₹54 auto / ₹80 cab at the 6 PM demo clock, which is peak; off-peak ₹31 / ₹52 / ₹77); Request | "Nearby drivers from a PostGIS query; ETA and fare are estimates; surge comes from the zone forecast." |
 | 0:35–1:05 | Driver accepts → Arriving → Ongoing; rider tracker updates live | "Realtime from Postgres changes; every transition is validated and logged." |
 | 1:05–1:35 | Judge › Chaos: **Reject** on a new ride → attempt 2 → recovery time | "The real reassignment RPC: the driver is excluded, the next-ranked driver is offered." |
 | 1:35–2:15 | Arena: seed 42, run → split screen | "Same requests, same fleet, two isolated worlds. Here's where we win, and where we don't." |

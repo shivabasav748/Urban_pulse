@@ -14,7 +14,7 @@ const DB = 'supabase_db_urban-pulse'
 const sql = (q: string) => execSync(`docker exec -i ${DB} psql -U postgres -q -t -A -v ON_ERROR_STOP=1`, { input: q }).toString().trim()
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const ACTIVE = `('accepted','arriving','ongoing')`
-const PICK = { lat: 12.9346, lng: 77.6113 }, DROP = { lat: 12.9755, lng: 77.6068 }
+const PICK = { lat: 15.86723, lng: 74.51172 }, DROP = { lat: 15.84906, lng: 74.50894 } // Rani Channamma Circle -> Railway Station
 
 type Session = { email: string; id: string; rpc: (fn: string, args?: Record<string, unknown>) => Promise<unknown>; db: SupabaseClient }
 async function session(email: string, signUpAsRider = false): Promise<Session> {
@@ -84,7 +84,7 @@ async function scenario(name: string, rounds: number, run: Round) {
   samples.forEach((s) => console.log(`      ${s}`))
 }
 
-const request = (r: Session) => () => r.rpc('request_ride', { p_pickup_label: 'Forum Mall', p_lat: PICK.lat, p_lng: PICK.lng, p_drop_label: 'MG Road Metro', d_lat: DROP.lat, d_lng: DROP.lng, p_category: 'cab' })
+const request = (r: Session) => () => r.rpc('request_ride', { p_pickup_label: 'Rani Channamma Circle', p_lat: PICK.lat, p_lng: PICK.lng, p_drop_label: 'Belagavi Railway Station', d_lat: DROP.lat, d_lng: DROP.lng, p_category: 'cab' })
 const pendingOffer = async (c: Session) => (await c.db.from('ride_offers').select('id, group_id').eq('outcome', 'pending').eq('driver_id', c.id).maybeSingle()).data as { id: string; group_id: string } | null
 const one = (q: string) => sql(q)
 const expectOnly = (msgs: string[], pattern: RegExp, label: string) => msgs.filter((m) => !pattern.test(m)).map((m) => `unexpected ${label} error: ${m}`)

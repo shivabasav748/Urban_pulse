@@ -8,21 +8,21 @@ select id as adm from auth.users where email = 'admin@demo.up' \gset
 select id as cap from auth.users where email = 'captain1@demo.up' \gset
 select id as sim from auth.users where email = 'meera@sim.up' \gset
 
--- fixture: pickup P = Forum Mall; only the captain under test is online
+-- fixture: pickup P = Rani Channamma Circle, Belagavi; only the captain under test is online
 update public.settings set fast_demo = false where id;
 delete from public.ride_events where true; delete from public.ride_offers where true; delete from public.trip_group_members where true;
 delete from public.trip_groups where true; delete from public.rides where true;
 update public.driver_profiles set online = false where true;
 create function pg_temp.at(d_m float8) returns table(lat float8, lng float8) language sql as $$
   select extensions.st_y(g::extensions.geometry), extensions.st_x(g::extensions.geometry)
-  from (select extensions.st_project(extensions.st_setsrid(extensions.st_makepoint(77.6113, 12.9346), 4326)::extensions.geography, d_m, 0) g) x $$;
+  from (select extensions.st_project(extensions.st_setsrid(extensions.st_makepoint(74.51172, 15.86723), 4326)::extensions.geography, d_m, 0) g) x $$;
 create function pg_temp.place(who uuid, d_m float8, src text, acc numeric, age_s int, on_ boolean default true) returns void language sql as $$
   update public.driver_profiles d set lat = p.lat, lng = p.lng, location_source = src, location_accuracy_m = acc,
     location_updated_at = now() - make_interval(secs => age_s), online = on_
   from pg_temp.at(d_m) p where d.user_id = who $$;
 create function pg_temp.group_for(radius int, cat text default 'cab') returns uuid language sql as $$
   insert into public.trip_groups(category, search_radius_m, stops) values (cat, radius,
-    '[{"type":"pickup","label":"P","lat":12.9346,"lng":77.6113},{"type":"drop","label":"D","lat":12.9755,"lng":77.6068}]') returning id $$;
+    '[{"type":"pickup","label":"P","lat":15.86723,"lng":74.51172},{"type":"drop","label":"D","lat":15.84906,"lng":74.50894}]') returning id $$;
 -- two statements on purpose: _rank is STABLE and only sees rows committed to the snapshot its statement started with
 create function pg_temp.ranked(who uuid, radius int, cat text default 'cab') returns boolean language plpgsql volatile as $$
 declare gid uuid;
@@ -60,22 +60,22 @@ select set_config('request.jwt.claims', json_build_object('sub', :'r1', 'role', 
 set local role authenticated;
 select pg_temp.check((select count(*) from public.driver_profiles) = 0, 'unmatched rider can read no captain rows');
 do $$ begin
-  perform public.nearby_drivers(12.9346, 77.6113, 2000, null);
+  perform public.nearby_drivers(15.86723, 74.51172, 2000, null);
   raise exception 'FAIL: rider can call nearby_drivers (exact coordinates)';
 exception when insufficient_privilege then raise notice 'PASS: nearby_drivers (exact coordinates) not callable by riders';
 end $$;
-select public.nearby_availability(12.9346, 77.6113, 2000) as avail \gset
+select public.nearby_availability(15.86723, 74.51172, 2000) as avail \gset
 select pg_temp.check(position('user_id' in :'avail') = 0 and position('driver_id' in :'avail') = 0, 'availability response carries no captain ids');
 select pg_temp.check((select bool_and(abs((m->>'lat')::float8 / 0.003 - 0.5 - round((m->>'lat')::float8 / 0.003 - 0.5)) < 1e-6)
   from jsonb_array_elements((:'avail')::jsonb->'markers') m), 'availability markers are grid-snapped, not exact positions');
 select pg_temp.check((select (c->>'count')::int from jsonb_array_elements((:'avail')::jsonb->'categories') c where c->>'category' = 'cab') = 1,
   'availability counts the one eligible cab within 2 km');
 do $$ begin
-  perform public.nearby_availability(12.9346, 77.6113, 50000);
+  perform public.nearby_availability(15.86723, 74.51172, 50000);
   raise exception 'FAIL: arbitrary radius accepted';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'PASS: only 2/3/5 km radii accepted';
 end $$;
-select public.request_ride('P', 12.9346, 77.6113, 'D', 12.9755, 77.6068, 'cab', 2000) as req \gset
+select public.request_ride('P', 15.86723, 74.51172, 'D', 15.84906, 74.50894, 'cab', 2000) as req \gset
 reset role;
 select pg_temp.check((select driver_id from public.ride_offers where outcome = 'pending' and group_id = (:'req'::jsonb->>'group_id')::uuid) = :'cap',
   'ride offered to the eligible captain');
@@ -112,7 +112,7 @@ select pg_temp.place(:'cap', 0, 'gps', 10, 60);
 select set_config('request.jwt.claims', json_build_object('sub', :'cap', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$ begin
-  perform public.update_location(13.0358, 77.597, 10, 'gps'); -- ~11 km in 60 s
+  perform public.update_location(15.93267, 74.52555, 10, 'gps'); -- Kakati, ~7.4 km in 60 s
   raise exception 'FAIL: GPS teleport accepted';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'PASS: implausible GPS jump rejected (%)', sqlerrm;
 end $$;
@@ -121,7 +121,7 @@ do $$ begin
   raise exception 'FAIL: location outside demo area accepted';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'PASS: outside demo area rejected';
 end $$;
-select public.update_location(12.9400, 77.6150, 25, 'gps');
+select public.update_location(15.8700, 74.5140, 25, 'gps');
 select pg_temp.check((select location_source = 'gps' and location_accuracy_m = 25 and location_updated_at > now() - interval '5 seconds'
   from public.driver_profiles where user_id = auth.uid()), 'valid GPS update stores accuracy, source and timestamp');
 reset role;
@@ -134,7 +134,7 @@ reset role;
 select set_config('request.jwt.claims', json_build_object('sub', :'sim', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$ begin
-  perform public.update_location(12.94, 77.61, 10, 'gps');
+  perform public.update_location(15.86, 74.51, 10, 'gps');
   raise exception 'FAIL: simulated captain location writable by a client';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'PASS: simulated captains cannot be moved by clients';
 end $$;

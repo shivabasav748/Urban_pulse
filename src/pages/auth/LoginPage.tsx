@@ -52,7 +52,7 @@ export default function LoginPage() {
           <span className="grid size-11 place-items-center rounded-xl bg-primary text-sm font-bold text-primary-foreground" aria-hidden>UP</span>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Urban Pulse</h1>
-            <p className="text-sm text-muted-foreground">Intelligent ride matching · Bengaluru demo</p>
+            <p className="text-sm text-muted-foreground">Intelligent ride matching · Belagavi demo</p>
           </div>
         </div>
         <Card>

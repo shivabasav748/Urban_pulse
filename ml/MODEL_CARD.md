@@ -6,7 +6,7 @@
 Predict ride demand per zone 30 minutes ahead, to drive the demo's forecast/arena views. Code: `ml/train.py`; self-check: `ml/test_train.py`.
 
 ## Data
-Synthetic, `numpy` seed 42. 42 days from 2026-10-02, 8 Bengaluru zones, 30-minute buckets (48 per day, 16,128 rows in total). Demand is Poisson with rate = zone base x hand-designed hour-of-day curve x weekday factor x (1 + 0.3 rain) x incident boost. Rain days (25%), concert days (18%) and flight-wave days (35%) are drawn once per day.
+Synthetic, `numpy` seed 42. 42 days from 2026-10-02, 8 Belagavi (Belgaum) zones (renamed from the original Bengaluru demo; kinds and base rates unchanged, so data and metrics are identical), 30-minute buckets (48 per day, 16,128 rows in total). Demand is Poisson with rate = zone base x hand-designed hour-of-day curve x weekday factor x (1 + 0.3 rain) x incident boost. Rain days (25%), concert days (18%) and flight-wave days (35%) are drawn once per day.
 
 Shocks:
 - Stadium concert end (22:00-23:00, x4): **scheduled**, known in advance.

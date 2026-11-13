@@ -6,10 +6,10 @@ All values are SIMULATED. The default seed is 42 and is editable in the UI.
 | ID | Injection | How it reaches the forecast | Expected chain |
 |---|---|---|---|
 | `normal` | none | model forecast (base) | reference |
-| `rush_hour` | demand ×1.6 in office zones (MG Road, Whitefield, Electronic City), 17:30–19:30 | **deterministic adjustment** (not a model feature; labelled) | gap ↑ in office zones → surge ↑ → reposition from residential |
-| `heavy_rain` | `rain=1` in Koramangala, Indiranagar, HSR | **model feature** `rain` (real prediction from `forecast.json` variant) | forecast ↑ ≈30% → gap → surge → reposition |
-| `concert_end` | `incident=1` in the Stadium zone at 22:00–23:00 | **model feature** `incident` | spike in one zone → strong surge (capped) → many moves |
-| `airport_wave` | `incident=1` in Airport/Hebbal, 06:00–07:30 | **model feature** `incident` | airport gap; long deadhead |
+| `rush_hour` | demand ×1.6 in office zones (Nehru Nagar / KLE, Udyambag, VTU / Machhe), 17:30–19:30 | **deterministic adjustment** (not a model feature; labelled) | gap ↑ in office zones → surge ↑ → reposition from residential |
+| `heavy_rain` | `rain=1` in Khade Bazar, Tilakwadi, Vadgaon | **model feature** `rain` (real prediction from `forecast.json` variant) | forecast ↑ ≈30% → gap → surge → reposition |
+| `concert_end` | `scheduled_event=1` at KSCA Stadium / Ramteerth Nagar, 22:00–23:00 | **model feature** `scheduled_event` | spike in one zone → strong surge (capped) → many moves |
+| `airport_wave` | `scheduled_event=1` at Belagavi Airport (Sambra), 06:00–07:30 | **model feature** `scheduled_event` | airport gap; long deadhead |
 
 The UI shows **before** (normal) beside **after** (scenario) for forecast, supply, gap, surge raw/smoothed and repositioning moves, then reruns both Arena worlds. **Apply** regenerates the input with the scenario. **Reset** returns to `normal` with the same seed.
 

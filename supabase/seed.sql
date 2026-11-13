@@ -1,15 +1,16 @@
--- LOCAL DEV SEED ONLY. All people, vehicles and positions are SIMULATED.
+-- LOCAL DEV SEED ONLY. Demo city: Belagavi (Belgaum), Karnataka. All people, vehicles and positions are SIMULATED.
 -- Demo password for every seeded account: demo1234 (local stack only, never reuse on a hosted project).
 
 insert into public.zones(id, name, kind, lat, lng) values
-  (1, 'Koramangala',     'mixed',       12.9352, 77.6245),
-  (2, 'Indiranagar',     'nightlife',   12.9719, 77.6412),
-  (3, 'MG Road',         'office',      12.9733, 77.6170),
-  (4, 'HSR Layout',      'residential', 12.9116, 77.6474),
-  (5, 'Whitefield',      'office',      12.9698, 77.7500),
-  (6, 'Electronic City', 'office',      12.8452, 77.6602),
-  (7, 'Stadium',         'events',      12.9788, 77.5996),
-  (8, 'Hebbal (Airport Rd)', 'transit', 13.0358, 77.5970);
+  -- Belagavi (Belgaum). Centres from OpenStreetMap Nominatim, looked up 13 Nov 2026; kinds match ml/train.py zones.
+  (1, 'Khade Bazar / City Centre',      'mixed',       15.86112, 74.51492),
+  (2, 'Tilakwadi / RPD',                'nightlife',   15.83686, 74.50193),
+  (3, 'Nehru Nagar / KLE',              'office',      15.88790, 74.51992),
+  (4, 'Vadgaon / Shahapur',             'residential', 15.83359, 74.52421),
+  (5, 'Udyambag Industrial',            'office',      15.81746, 74.49263),
+  (6, 'VTU / Machhe',                   'office',      15.77730, 74.46486),
+  (7, 'KSCA Stadium / Ramteerth Nagar', 'events',      15.88564, 74.54633),
+  (8, 'Belagavi Airport (Sambra)',      'transit',     15.86308, 74.61119);
 
 -- sim clock sits inside the forecast test week (Thu 12 Nov 2026, 18:00 IST) so predicted vs actual is visible
 insert into public.settings(id, sim_clock) values (true, '2026-11-12 18:00:00+05:30');
@@ -41,10 +42,10 @@ select pg_temp.mk_user('rider3@demo.up', 'Chitra (rider)', 'rider');
 do $$
 declare uid uuid := pg_temp.mk_user('captain1@demo.up', 'Captain Ravi', 'driver', 'cab');
 begin
-  update public.driver_profiles set lat = 12.9330, lng = 77.6210, online = true, vehicle_label = 'Hatchback (demo)',
+  update public.driver_profiles set lat = 15.8655, lng = 74.5100, online = true, vehicle_label = 'Hatchback (demo)',
     plate = 'KA-01-UP-0001', trips_today = 3, offers_received = 10, offers_accepted = 9, idle_since = now() - interval '6 min'
   where user_id = uid;
-  insert into public.demo_driver_seed values (uid, 12.9330, 77.6210, 3, 9, 6);
+  insert into public.demo_driver_seed values (uid, 15.8655, 74.5100, 3, 9, 6);
 end $$;
 
 -- 16 SIMULATED captains: (name, category, zone lat/lng offset, trips_today, accepted of 10, idle minutes)
@@ -52,14 +53,14 @@ do $$
 declare r record; uid uuid; i int := 0;
 begin
   for r in select * from (values
-    ('Arjun','cab',   12.9372,77.6268, 6, 10,  2), ('Meera','cab',  12.9301,77.6180, 1,  7, 25),
-    ('Kiran','cab',   12.9700,77.6390, 4,  9, 10), ('Farah','cab',  12.9745,77.6150, 2,  8, 18),
-    ('Vikram','cab',  12.9120,77.6450, 5,  6,  4), ('Lakshmi','cab',12.9680,77.7480, 0,  9, 30),
-    ('Imran','cab',   12.8470,77.6580, 3,  9,  8), ('Divya','cab',  13.0340,77.5990, 2, 10, 12),
-    ('Rahul','bike',  12.9360,77.6230, 7, 10,  1), ('Sneha','bike', 12.9725,77.6425, 2,  8, 20),
-    ('Joseph','bike', 12.9740,77.6190, 4,  5, 14), ('Pooja','bike', 12.9100,77.6490, 1,  9, 22),
-    ('Naveen','auto', 12.9340,77.6260, 3,  8,  9), ('Ayesha','auto',12.9705,77.6400, 5,  9,  3),
-    ('Suresh','auto', 12.9790,77.6010, 0,  7, 28), ('Tanvi','auto', 12.8460,77.6620, 2, 10, 16)
+    ('Arjun','cab',   15.8630,74.5175, 6, 10,  2), ('Meera','cab',  15.8510,74.5105, 1,  7, 25),
+    ('Kiran','cab',   15.8385,74.5040, 4,  9, 10), ('Farah','cab',  15.8860,74.5170, 2,  8, 18),
+    ('Vikram','cab',  15.8350,74.5220, 5,  6,  4), ('Lakshmi','cab',15.8190,74.4950, 0,  9, 30),
+    ('Imran','cab',   15.7900,74.4820, 3,  9,  8), ('Divya','cab',  15.8620,74.6080, 2, 10, 12),
+    ('Rahul','bike',  15.8600,74.5130, 7, 10,  1), ('Sneha','bike', 15.8400,74.5000, 2,  8, 20),
+    ('Joseph','bike', 15.8800,74.5220, 4,  5, 14), ('Pooja','bike', 15.8410,74.5170, 1,  9, 22),
+    ('Naveen','auto', 15.8645,74.5200, 3,  8,  9), ('Ayesha','auto',15.8770,74.5320, 5,  9,  3),
+    ('Suresh','auto', 15.8840,74.5440, 0,  7, 28), ('Tanvi','auto', 15.8250,74.5040, 2, 10, 16)
   ) v(name, cat, lat, lng, trips, acc, idle) loop
     i := i + 1;
     uid := pg_temp.mk_user(lower(r.name) || '@sim.up', 'Captain ' || r.name, 'driver', r.cat);

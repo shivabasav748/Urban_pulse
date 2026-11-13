@@ -69,7 +69,11 @@ export function StatusStepper({ status }: { status: RideStatus }) {
 }
 
 export function FareBreakdown({ fare }: { fare: Ride['fare'] }) {
-  const rows: [string, string][] = [['Base fare', inr(fare.base)], ['Distance', inr(fare.distance)], ['Time', inr(fare.time)]]
+  const rows: [string, string][] = [
+    [fare.included_km ? `Base fare (first ${fare.included_km} km)` : 'Base fare', inr(fare.base)],
+    [fare.per_km ? `Distance (₹${fare.per_km}/km after that)` : 'Distance', inr(fare.distance)],
+    [fare.per_min ? `Time (₹${fare.per_min}/min)` : 'Time', inr(fare.time)],
+  ]
   if (Number(fare.surge_mult) !== 1) rows.push(['Surge (simulated)', `×${Number(fare.surge_mult).toFixed(2)}`])
   if (fare.pool_discount) rows.push(['Pool discount', `−${fare.pool_discount * 100}%`])
   return (

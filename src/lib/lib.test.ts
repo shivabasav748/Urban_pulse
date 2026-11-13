@@ -20,7 +20,13 @@ describe('geo/fare', () => {
     expect(km({ lat: 12.9352, lng: 77.6245 }, { lat: 12.9733, lng: 77.617 })).toBeCloseTo(5.8, 0)
   })
   it('fare total = (base + distance + time) x surge', () => {
-    expect(fare('cab', 10, 20, 1.5)).toEqual({ base: 50, distance: 150, time: 40, surge_mult: 1.5, total: 360 })
+    // cab: Rs 55 incl. 2 km + 17 x 8 km + 1.5 x 20 min = 221, x 1.5 surge = 331.5 -> 332
+    expect(fare('cab', 10, 20, 1.5)).toEqual({ base: 55, included_km: 2, per_km: 17, per_min: 1.5, distance: 136, time: 30, surge_mult: 1.5, total: 332 })
+  })
+  it('short trips pay only base + time, and bike < auto < cab at every distance', () => {
+    expect(fare('auto', 1.2, 3).total).toBe(33)
+    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('bike', km, km * 2).total).toBeLessThan(fare('auto', km, km * 2).total)
+    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('auto', km, km * 2).total).toBeLessThan(fare('cab', km, km * 2).total)
   })
 })
 
@@ -52,6 +58,11 @@ describe('pooling', () => {
       expect(i).toBeLessThan(j)
     }
     expect(p.perRider!.every((r) => r.detourPct <= 40)).toBe(true)
+  })
+  it('the judge-console Belagavi demo pair is poolable', () => {
+    const r = (id: string, p: [number, number], d: [number, number]) => ({ id, pickup: { lat: p[0], lng: p[1], label: id }, drop: { lat: d[0], lng: d[1], label: id } })
+    const plan = planPool(r('rcc', [15.86723, 74.51172], [15.83686, 74.50193]), r('kb', [15.86112, 74.51492], [15.83368, 74.50645]), 12)
+    expect(plan.compatible).toBe(true)
   })
   it('rejects distant pickups', () => {
     const far = { ...b, pickup: { lat: 12.8452, lng: 77.6602, label: 'E-City' } }

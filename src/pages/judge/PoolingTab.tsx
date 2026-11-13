@@ -13,7 +13,8 @@ import { rpc, supabase, type Ride } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const P = (id: string) => PLACES.find((p) => p.id === id)!
-const DEMO_PAIR = [['forum', 'mgmetro'], ['kora5', 'trinity']] as const
+// pickups ~0.7 km apart, drops ~0.6 km apart; compatibility is checked by planPool (see lib.test.ts)
+const DEMO_PAIR = [['rani-channamma-circle', 'tilakwadi'], ['khade-bazar', 'rpd-ground']] as const
 
 export default function PoolingTab() {
   const qc = useQueryClient()

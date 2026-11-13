@@ -25,5 +25,18 @@ Demo accounts (local seed only, password `demo1234`): `rider@demo.up`, `captain1
 Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, `pnpm db:smoke` (SQL integrity tests), `pnpm e2e` (Playwright, uses local Chrome), `pnpm arena:report [seed]`.
 Retrain the forecast (optional, output is committed): `pip install -r ml/requirements.txt && python ml/train.py`.
 
+## Demo city: Belagavi (Belgaum)
+The demo runs on Belagavi, Karnataka: 8 demand zones and 35 landmarks, with coordinates from a one-time OpenStreetMap lookup. Captains, demand, weather and surge are simulated.
+
+**Fares are made up for the demo** (base fare covering the first stretch, then per-km and per-minute charges):
+
+| | Base fare | Per km after that | Per minute |
+|---|---|---|---|
+| Bike | ₹20 (first 1.5 km) | ₹6 | ₹0.50 |
+| Auto | ₹30 (first 1.5 km) | ₹13 | ₹1.00 |
+| Cab | ₹55 (first 2 km) | ₹17 | ₹1.50 |
+
+For example, Rani Channamma Circle to the railway station (≈2.8 km) costs about ₹31 by bike, ₹52 by auto and ₹77 by cab before surge. The full chart is in [docs/FARES.md](docs/FARES.md).
+
 ## Docs
 [Scope](docs/PRODUCT_SCOPE.md) · [Data model](docs/DATA_MODEL.md) · [API](docs/API_CONTRACT.md) · [Demo](docs/DEMO_SCRIPT.md) · [Competitor matrix](docs/COMPETITOR_FEATURE_MATRIX.md)

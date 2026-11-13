@@ -10,16 +10,16 @@ export const ALGORITHM_VERSION = 'arena-v1 (score weights .45/.25/.20/.10, greed
 export type ScenarioId = 'base' | 'rush_hour' | 'heavy_rain' | 'concert_end' | 'airport_wave'
 export const ARENA_SCENARIOS: Record<ScenarioId, { label: string; startHour: number; how: string }> = {
   base: { label: 'Normal evening', startHour: 17, how: 'model forecast' },
-  rush_hour: { label: 'Rush hour (office zones ×1.6)', startHour: 17.5, how: 'deterministic adjustment, not a model feature' },
-  heavy_rain: { label: 'Heavy rain (Koramangala, Indiranagar, HSR)', startHour: 17, how: 'model feature: rain' },
-  concert_end: { label: 'Concert ends at Stadium', startHour: 21.5, how: 'model feature: incident' },
-  airport_wave: { label: 'Airport flight wave (Hebbal)', startHour: 5.5, how: 'model feature: incident' },
+  rush_hour: { label: 'Rush hour (Nehru Nagar, Udyambag, VTU ×1.6)', startHour: 17.5, how: 'deterministic adjustment, not a model feature' },
+  heavy_rain: { label: 'Heavy rain (Khade Bazar, Tilakwadi, Vadgaon)', startHour: 17, how: 'model feature: rain' },
+  concert_end: { label: 'Match ends at KSCA Stadium', startHour: 21.5, how: 'model feature: incident' },
+  airport_wave: { label: 'Flight wave at Belagavi Airport (Sambra)', startHour: 5.5, how: 'model feature: incident' },
 }
 
-const ZONES = [
-  { id: 1, lat: 12.9352, lng: 77.6245 }, { id: 2, lat: 12.9719, lng: 77.6412 }, { id: 3, lat: 12.9733, lng: 77.617 },
-  { id: 4, lat: 12.9116, lng: 77.6474 }, { id: 5, lat: 12.9698, lng: 77.75 }, { id: 6, lat: 12.8452, lng: 77.6602 },
-  { id: 7, lat: 12.9788, lng: 77.5996 }, { id: 8, lat: 13.0358, lng: 77.597 },
+const ZONES = [ // Belagavi zone centres (OpenStreetMap); same ids/kinds as the model
+  { id: 1, lat: 15.86112, lng: 74.51492 }, { id: 2, lat: 15.83686, lng: 74.50193 }, { id: 3, lat: 15.8879, lng: 74.51992 },
+  { id: 4, lat: 15.83359, lng: 74.52421 }, { id: 5, lat: 15.81746, lng: 74.49263 }, { id: 6, lat: 15.7773, lng: 74.46486 },
+  { id: 7, lat: 15.88564, lng: 74.54633 }, { id: 8, lat: 15.86308, lng: 74.61119 },
 ]
 const FC = forecastJson.scenarios as Record<string, Record<string, number[]>>
 

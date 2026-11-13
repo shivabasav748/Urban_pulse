@@ -133,7 +133,7 @@ export default function DriverPage() {
     if (mode === 'gps') {
       const f = await geo.request()
       if (!f) return // panel shows the reason and the manual option
-      if (!inDemoArea(f.lat, f.lng)) { setLocError('You are outside the Bengaluru demo area. Go online with a manual position instead.'); return }
+      if (!inDemoArea(f.lat, f.lng)) { setLocError('You are outside the Belagavi demo area. Go online with a manual position instead.'); return }
       await sendLoc(f.lat, f.lng, f.accuracy, 'gps')
     } else if (me.data) {
       await sendLoc(me.data.lat, me.data.lng, null, 'manual')

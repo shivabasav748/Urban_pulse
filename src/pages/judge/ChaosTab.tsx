@@ -44,7 +44,8 @@ export default function ChaosTab() {
     mutationFn: async () => {
       const r = riders.data?.[Math.floor(Math.random() * (riders.data?.length || 1))]
       if (!r) throw new Error('No seeded riders')
-      const [a, b] = [PLACES[0], PLACES[5]] // Forum Mall -> MG Road Metro: several cabs nearby
+      // Rani Channamma Circle -> Railway Station: several cabs within 2 km
+      const [a, b] = ['rani-channamma-circle', 'railway-station'].map((id) => PLACES.find((p) => p.id === id)!)
       return rpc<string>('demo_request', { p_rider: r.id, p_pickup_label: a.name, p_lat: a.lat, p_lng: a.lng, p_drop_label: b.name, d_lat: b.lat, d_lng: b.lng, p_category: 'cab', p_dispatch: true })
     },
     onSuccess: () => { setGid(undefined); qc.invalidateQueries(); toast.success('Demo ride created and dispatched') },

@@ -19,10 +19,10 @@ type ZI = { sim_clock: string; scenario: string; cap: number; alpha: number; for
 
 export const SCENARIOS = [
   { id: 'base', label: 'Normal (model forecast)', how: 'model' },
-  { id: 'heavy_rain', label: 'Heavy rain: Koramangala, Indiranagar, HSR (15:00–21:00)', how: 'model feature: rain' },
-  { id: 'concert_end', label: 'Concert ends at Stadium (22:00–23:00)', how: 'model feature: incident' },
-  { id: 'airport_wave', label: 'Airport flight wave, Hebbal (06:00–07:30)', how: 'model feature: incident' },
-  { id: 'rush_hour', label: 'Rush hour, office zones (17:30–19:30)', how: 'deterministic ×1.6 adjustment (not a model feature)' },
+  { id: 'heavy_rain', label: 'Heavy rain: Khade Bazar, Tilakwadi, Vadgaon (15:00–21:00)', how: 'model feature: rain' },
+  { id: 'concert_end', label: 'Match ends at KSCA Stadium (22:00–23:00)', how: 'model feature: incident' },
+  { id: 'airport_wave', label: 'Flight wave at Belagavi Airport (06:00–07:30)', how: 'model feature: incident' },
+  { id: 'rush_hour', label: 'Rush hour: Nehru Nagar, Udyambag, VTU (17:30–19:30)', how: 'deterministic ×1.6 adjustment (not a model feature)' },
 ] as const
 const RISK = { low: 'border-success/20 bg-success-soft text-success', medium: 'border-warning/25 bg-warning-soft text-warning', high: 'border-destructive/20 bg-danger-soft text-destructive' }
 const hhmm = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${h % 1 ? '30' : '00'}`

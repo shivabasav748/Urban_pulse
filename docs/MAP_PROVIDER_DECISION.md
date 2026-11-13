@@ -4,7 +4,7 @@
 
 ## What the code does today (verified)
 - Map: React-Leaflet + OpenStreetMap tiles with visible attribution (`src/components/map/MapCanvas.tsx`).
-- Places: 16 seeded Bengaluru demo places with our own coordinates (`src/lib/places.ts`). No geocoder or autocomplete API.
+- Places: 35 Belagavi landmarks from a one-time OpenStreetMap Nominatim lookup, stored in `src/lib/places.ts` (originally 16 Bengaluru places). No geocoder or autocomplete API at runtime.
 - Routing/ETA: great-circle distance × 1.35 road factor, hour-based speed, labelled "estimated" (`src/lib/geo.ts` and `public._km/_minutes` in SQL).
 - Dispatch: PostGIS `ST_DWithin` on `driver_profiles.location`; ride pickup/drop coordinates are stored permanently in `rides` and `trip_groups.stops`.
 - No Google API key, Google Cloud project or `gcloud` CLI on the build machine.

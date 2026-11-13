@@ -4,12 +4,12 @@ begin;
 select id as rider from auth.users where email = 'rider@demo.up' \gset
 select id as admin from auth.users where email = 'admin@demo.up' \gset
 
--- 1. rider requests Koramangala -> MG Road (cab); simulated drivers must not auto-accept during the test
+-- 1. rider requests Rani Channamma Circle -> Railway Station, Belagavi (cab); simulated drivers must not auto-accept during the test
 update public.settings set fast_demo = false;
 select set_config('request.jwt.claims', json_build_object('sub', :'rider', 'role', 'authenticated')::text, true);
 set local role authenticated;
-select (public.estimate_ride(12.9352, 77.6245, 12.9733, 77.6170)->'categories'->2->'fare'->>'total') as cab_fare_estimate;
-select (public.request_ride('Forum Mall', 12.9346, 77.6113, 'MG Road Metro', 12.9755, 77.6068, 'cab')) as req \gset
+select (public.estimate_ride(15.86723, 74.51172, 15.84906, 74.50894)->'categories'->2->'fare'->>'total') as cab_fare_estimate;
+select (public.request_ride('Rani Channamma Circle', 15.86723, 74.51172, 'Belagavi Railway Station', 15.84906, 74.50894, 'cab')) as req \gset
 reset role;
 select (:'req'::jsonb->>'group_id') as gid \gset
 select driver_id as d1, attempt_no from public.ride_offers where group_id = :'gid' and outcome = 'pending' \gset

@@ -46,7 +46,7 @@ Two people never edit the same file at the same time. Branches are `feature/*` a
 ## 3. Stack (pinned at install)
 React 19, TypeScript, Vite, Tailwind v4, shadcn/ui, Lucide, React-Leaflet + OSM tiles (with attribution), TanStack Query, @supabase/supabase-js, Zod (forms), Vitest, Playwright, pnpm, Supabase CLI via `pnpm dlx supabase@<pinned>`.
 Not used until a concrete need appears: Zustand, Motion, 21st.dev, Watermelon UI, React Bits (each needs a licence check before adoption).
-Geocoding uses about 20 seeded Bengaluru demo places, so there is no Nominatim autocomplete. Routing is haversine × 1.35 road factor with an hour-based speed, labelled "estimated".
+Demo city is Belagavi (Belgaum). Places are 35 landmarks looked up once from OpenStreetMap and stored in `src/lib/places.ts`, so there is no live geocoder or Nominatim autocomplete. Prices and speeds: docs/FARES.md. Routing is haversine × 1.35 road factor with an hour-based speed, labelled "estimated".
 
 ## 4. Screens / component tree
 - `/login`, `/signup`: role choice (rider/driver); demo accounts listed in dev.

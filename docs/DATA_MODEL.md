@@ -26,7 +26,7 @@ erDiagram
 | `trip_group_members` | `group_id`, `ride_id unique`, `pickup_seq`, `drop_seq`, `detour_min`, `fare_share` | `ride_id unique` puts a ride in at most one group. |
 | `ride_offers` | `group_id`, `driver_id`, `attempt_no`, `score`, `components jsonb`, `outcome check (pending,accepted,rejected,no_response,cancelled,expired_superseded)`, `offered_at`, `expires_at`, `responded_at` | Full allocation evidence. |
 | `ride_events` | `id identity`, `ride_id`, `group_id`, `actor`, `type`, `from_status`, `to_status`, `payload jsonb`, `at` | Append-only: no UPDATE/DELETE grant and RLS select only. |
-| `zones` | `id smallint`, `name`, `kind`, `center geography` | 8 Bengaluru zones. A point belongs to the nearest centre (Voronoi). |
+| `zones` | `id smallint`, `name`, `kind`, `center geography` | 8 Belagavi (Belgaum) zones, centres from OpenStreetMap. A point belongs to the nearest centre (Voronoi). |
 | `demand_observations` | `zone_id`, `ts`, `demand`, `rain`, `incident` | SIMULATED. |
 | `demand_forecasts` | `zone_id`, `target_ts`, `scenario`, `predicted`, `actual null`, `model_version` | Produced by `ml/train.py`. |
 | `model_runs` | `version`, `model`, `mae`, `baseline_mae`, `features jsonb`, `train_rows`, `test_rows`, `trained_at` | |

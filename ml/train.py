@@ -1,6 +1,6 @@
 """Urban Pulse demand forecast (PS 02 feature A). Everything here is SIMULATED.
 
-1. Generate 42 days of synthetic demand for 8 Bengaluru zones in 30-min buckets (seed 42).
+1. Generate 42 days of synthetic demand for 8 Belagavi (Belgaum) zones in 30-min buckets (seed 42).
 2. Train HistGradientBoostingRegressor to predict demand 30 minutes ahead.
 3. Chronological split: train on days 8-35, test on days 36-42. Compare MAE with seasonal-naive (same time last week).
 4. Write supabase/seed_forecast.sql (observations, forecasts, model_runs) and src/sim/forecast.json (12 Nov, all scenarios).
@@ -24,10 +24,10 @@ DAYS, BPD = 42, 48  # days, 30-min buckets per day
 DEMO_DAY = 41       # 0-based index of 12 Nov 2026 (last test day)
 VERSION = "hgb-v2-seed42"
 
-ZONES = [  # id, name, kind, base demand per 30 min
-    (1, "Koramangala", "mixed", 3.0), (2, "Indiranagar", "nightlife", 2.6), (3, "MG Road", "office", 3.2),
-    (4, "HSR Layout", "residential", 2.2), (5, "Whitefield", "office", 2.8), (6, "Electronic City", "office", 2.4),
-    (7, "Stadium", "events", 0.8), (8, "Hebbal (Airport Rd)", "transit", 1.6),
+ZONES = [  # id, name, kind, base demand per 30 min. Demo city: Belagavi (Belgaum); kinds/bases unchanged from v2.
+    (1, "Khade Bazar / City Centre", "mixed", 3.0), (2, "Tilakwadi / RPD", "nightlife", 2.6), (3, "Nehru Nagar / KLE", "office", 3.2),
+    (4, "Vadgaon / Shahapur", "residential", 2.2), (5, "Udyambag Industrial", "office", 2.8), (6, "VTU / Machhe", "office", 2.4),
+    (7, "KSCA Stadium / Ramteerth Nagar", "events", 0.8), (8, "Belagavi Airport (Sambra)", "transit", 1.6),
 ]
 OFFICE = {3, 5, 6}
 INCIDENT_BOOST = {"events": 4.0, "transit": 2.0}

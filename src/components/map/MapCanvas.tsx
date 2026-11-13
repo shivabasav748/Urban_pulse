@@ -3,7 +3,7 @@ import L from 'leaflet'
 import { AttributionControl, Circle, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect, useState } from 'react'
 import { MapPinOff, Route } from 'lucide-react'
-import { BLR_CENTER } from '@/lib/places'
+import { CITY_CENTER, CITY_NAME } from '@/lib/places'
 import { cn } from '@/lib/utils'
 
 /** approx: privacy-snapped availability marker (a grid cell), not a person's position. n = captains in that cell. */
@@ -51,8 +51,8 @@ export function MapCanvas({ drivers = [], zones = [], pins = [], route, routeLab
   const [tilesDown, setTilesDown] = useState(false)
   return (
     <div className={cn('relative isolate', panel && 'up-map-panel', className ?? 'h-full w-full')}>
-      <MapContainer center={BLR_CENTER} zoom={12} className="h-full w-full" zoomControl={false} attributionControl={false}
-        aria-label="Map of the Bengaluru demo area">
+      <MapContainer center={CITY_CENTER} zoom={13} className="h-full w-full" zoomControl={false} attributionControl={false}
+        aria-label={`Map of the ${CITY_NAME} demo area`}>
         <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           eventHandlers={{ tileerror: () => setTilesDown(true), tileload: () => setTilesDown(false) }} />

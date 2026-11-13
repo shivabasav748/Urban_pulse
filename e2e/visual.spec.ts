@@ -27,10 +27,10 @@ const shot = async (page: Page, vp: string, name: string) => {
 }
 const book = async (page: Page) => {
   // new first-run flow: search a pickup landmark, then a destination (no GPS in headless runs)
-  await page.getByPlaceholder('Search a pickup landmark').fill('Forum')
-  await page.getByRole('button', { name: /^Forum Mall/ }).click()
-  await page.getByPlaceholder('Search a destination').fill('MG Road Metro')
-  await page.getByRole('button', { name: /^MG Road Metro/ }).click()
+  await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
+  await page.getByRole('button', { name: /^Rani Channamma Circle/ }).click()
+  await page.getByPlaceholder('Search a destination').fill('Railway Station')
+  await page.getByRole('button', { name: /^Belagavi Railway Station/ }).click()
   await expect(page.getByRole('radio', { name: /^Cab/ })).toBeVisible()
   await page.getByRole('radio', { name: /^Cab/ }).click()
 }
@@ -42,8 +42,8 @@ for (const [w, h] of VIEWPORTS) {
     if (SCREENS.includes('login')) test(`login ${vp}`, async ({ page }) => { await page.goto('/#/login'); await shot(page, vp, 'login') })
     if (SCREENS.includes('rider-book')) test(`rider-book ${vp}`, async ({ page }) => {
       await login(page, 'Rider'); await shot(page, vp, 'rider-empty')
-      await page.getByPlaceholder('Search a pickup landmark').fill('Forum'); await page.getByRole('button', { name: /^Forum Mall/ }).click(); await shot(page, vp, 'rider-pickup-set')
-      await page.getByPlaceholder('Search a destination').fill('MG Road Metro'); await page.getByRole('button', { name: /^MG Road Metro/ }).click()
+      await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma'); await page.getByRole('button', { name: /^Rani Channamma Circle/ }).click(); await shot(page, vp, 'rider-pickup-set')
+      await page.getByPlaceholder('Search a destination').fill('Railway Station'); await page.getByRole('button', { name: /^Belagavi Railway Station/ }).click()
       await expect(page.getByRole('radio', { name: /^Cab/ })).toBeVisible(); await page.getByRole('radio', { name: /^Cab/ }).click(); await shot(page, vp, 'rider-book')
     })
     if (SCREENS.includes('rider-track')) test(`rider-track ${vp}`, async ({ page }) => {

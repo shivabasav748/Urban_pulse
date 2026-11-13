@@ -4,7 +4,7 @@ Method: REA headless Chromium captures (1440×900, en-IN, logged out) on 13 Nov 
 
 | Product | Feature / pattern | Evidence URL | Status | Relevance | Priority |
 |---|---|---|---|---|---|
-| Uber | City chip + "Change city" above the booking form | https://www.uber.com/in/en/ | observed | Show "Bengaluru (demo)" context | P2 |
+| Uber | City chip + "Change city" above the booking form | https://www.uber.com/in/en/ | observed | Show "Belagavi (demo)" context | P2 |
 | Uber | "Pickup now" time selector | https://www.uber.com/in/en/ | observed | Now-only; scheduling is a non-goal | skip |
 | Uber | Pickup + Dropoff inputs joined by a vertical connector line | https://www.uber.com/in/en/ | observed | Connected place selectors | P0 |
 | Uber | "Auto-fill my location" button in the pickup field | https://www.uber.com/in/en/ | observed | "Use my location" (simulated) | P1 |

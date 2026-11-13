@@ -1,52 +1,50 @@
-// Curated Bengaluru demo landmarks (no geocoding API: public Nominatim forbids autocomplete).
-// Coordinates are approximate and SIMULATED-demo only; never presented as surveyed addresses.
+// Belagavi (Belgaum) demo landmarks. Coordinates from a one-time OpenStreetMap Nominatim lookup (13 Nov 2026),
+// stored here so the app never calls a geocoder (public Nominatim forbids autocomplete). Demo use only.
 export type Place = { id: string; name: string; area: string; lat: number; lng: number }
 
 export const PLACES: Place[] = [
-  { id: 'forum', name: 'Forum Mall', area: 'Koramangala', lat: 12.9346, lng: 77.6113 },
-  { id: 'kora5', name: '5th Block Jyoti Nivas', area: 'Koramangala', lat: 12.9352, lng: 77.6245 },
-  { id: 'sony', name: 'Sony World Signal', area: 'Koramangala', lat: 12.9373, lng: 77.6268 },
-  { id: 'indira100', name: '100 Feet Road', area: 'Indiranagar', lat: 12.9719, lng: 77.6412 },
-  { id: 'indirametro', name: 'Indiranagar Metro', area: 'Indiranagar', lat: 12.9784, lng: 77.6408 },
-  { id: 'domlur', name: 'Domlur Flyover', area: 'Domlur', lat: 12.961, lng: 77.6387 },
-  { id: 'mgmetro', name: 'MG Road Metro', area: 'MG Road', lat: 12.9755, lng: 77.6068 },
-  { id: 'trinity', name: 'Trinity Circle', area: 'MG Road', lat: 12.9726, lng: 77.6197 },
-  { id: 'brigade', name: 'Brigade Road', area: 'MG Road', lat: 12.9719, lng: 77.607 },
-  { id: 'commercial', name: 'Commercial Street', area: 'Shivajinagar', lat: 12.9822, lng: 77.609 },
-  { id: 'ulsoor', name: 'Ulsoor Lake', area: 'Halasuru', lat: 12.983, lng: 77.619 },
-  { id: 'ubcity', name: 'UB City', area: 'Ashok Nagar', lat: 12.9716, lng: 77.596 },
-  { id: 'cubbon', name: 'Cubbon Park', area: 'MG Road', lat: 12.9763, lng: 77.5929 },
-  { id: 'stadium', name: 'Chinnaswamy Stadium', area: 'Stadium', lat: 12.9788, lng: 77.5996 },
-  { id: 'majestic', name: 'Kempegowda Bus Station', area: 'Majestic', lat: 12.9767, lng: 77.5713 },
-  { id: 'citystation', name: 'Bengaluru City Railway Station', area: 'Majestic', lat: 12.978, lng: 77.5695 },
-  { id: 'mantri', name: 'Mantri Square Mall', area: 'Malleshwaram', lat: 12.9916, lng: 77.5712 },
-  { id: 'malleshwaram', name: '8th Cross Market', area: 'Malleshwaram', lat: 13.0035, lng: 77.57 },
-  { id: 'rajajinagar', name: 'Rajajinagar Metro', area: 'Rajajinagar', lat: 12.991, lng: 77.555 },
-  { id: 'yeshwanthpur', name: 'Yeshwanthpur Junction', area: 'Yeshwanthpur', lat: 13.0285, lng: 77.5409 },
-  { id: 'hebbal', name: 'Hebbal Flyover', area: 'Hebbal', lat: 13.0358, lng: 77.597 },
-  { id: 'manyata', name: 'Manyata Tech Park', area: 'Nagawara', lat: 13.0451, lng: 77.6266 },
-  { id: 'lalbagh', name: 'Lalbagh West Gate', area: 'Basavanagudi', lat: 12.9507, lng: 77.5848 },
-  { id: 'jain', name: 'Jain University (JGI)', area: 'Jayanagar', lat: 12.9254, lng: 77.5838 },
-  { id: 'jayanagar4', name: 'Jayanagar 4th Block', area: 'Jayanagar', lat: 12.9299, lng: 77.5823 },
-  { id: 'banashankari', name: 'Banashankari Temple', area: 'Banashankari', lat: 12.9255, lng: 77.5468 },
-  { id: 'jpnagar', name: 'JP Nagar 6th Phase', area: 'JP Nagar', lat: 12.9063, lng: 77.5857 },
-  { id: 'btm', name: 'BTM Layout Water Tank', area: 'BTM Layout', lat: 12.9166, lng: 77.6101 },
-  { id: 'silkboard', name: 'Silk Board Junction', area: 'BTM Layout', lat: 12.9177, lng: 77.6238 },
-  { id: 'hsr', name: 'HSR BDA Complex', area: 'HSR Layout', lat: 12.9116, lng: 77.6474 },
-  { id: 'agara', name: 'Agara Lake', area: 'HSR Layout', lat: 12.9237, lng: 77.6431 },
-  { id: 'ecospace', name: 'RMZ Ecospace', area: 'Bellandur', lat: 12.9265, lng: 77.68 },
-  { id: 'marathahalli', name: 'Marathahalli Bridge', area: 'Marathahalli', lat: 12.9569, lng: 77.7011 },
-  { id: 'bagmane', name: 'Bagmane Tech Park', area: 'CV Raman Nagar', lat: 12.98, lng: 77.662 },
-  { id: 'phoenix', name: 'Phoenix Marketcity', area: 'Whitefield', lat: 12.9975, lng: 77.6966 },
-  { id: 'itpl', name: 'ITPL Main Gate', area: 'Whitefield', lat: 12.9857, lng: 77.7359 },
-  { id: 'meenakshi', name: 'Meenakshi Mall', area: 'Bannerghatta Road', lat: 12.876, lng: 77.596 },
-  { id: 'infosys', name: 'Infosys Gate 1', area: 'Electronic City', lat: 12.8452, lng: 77.6602 },
+  { id: 'rani-channamma-circle', name: "Rani Channamma Circle", area: "Khade Bazar", lat: 15.86723, lng: 74.51172 },
+  { id: 'central-bus-stand', name: "Central Bus Stand (CBT)", area: "Belgaum Fort", lat: 15.86388, lng: 74.52106 },
+  { id: 'khade-bazar', name: "Khade Bazar", area: "Khade Bazar", lat: 15.86112, lng: 74.51492 },
+  { id: 'sardar-maidan', name: "Sardar Ground (Sardar Maidan)", area: "Khade Bazar", lat: 15.86608, lng: 74.51009 },
+  { id: 'nucleus-mall', name: "Nucleus Mall", area: "Khade Bazar", lat: 15.85871, lng: 74.50831 },
+  { id: 'gogte-circle', name: "Gogte Circle", area: "Tilakwadi", lat: 15.84797, lng: 74.50694 },
+  { id: 'belagavi-fort', name: "Belagavi Fort (Kote)", area: "Belgaum Fort", lat: 15.85839, lng: 74.52416 },
+  { id: 'kote-kere', name: "Kote Kere", area: "Belgaum Fort", lat: 15.86647, lng: 74.52638 },
+  { id: 'camp', name: "Camp", area: "Camp", lat: 15.8515, lng: 74.49966 },
+  { id: 'inox-chandan', name: "INOX (Chandan) Cinema", area: "Shastri Nagar", lat: 15.85293, lng: 74.50936 },
+  { id: 'railway-station', name: "Belagavi Railway Station", area: "Shastri Nagar", lat: 15.84906, lng: 74.50894 },
+  { id: 'tilakwadi', name: "Tilakwadi", area: "Tilakwadi", lat: 15.83686, lng: 74.50193 },
+  { id: 'rpd-ground', name: "RPD Ground", area: "Adarsh Nagar", lat: 15.83368, lng: 74.50645 },
+  { id: 'arun-theatre', name: "Arun Theatre", area: "Tilakwadi", lat: 15.84219, lng: 74.50299 },
+  { id: 'shahapur', name: "Shahapur", area: "Shahapur", lat: 15.84007, lng: 74.51777 },
+  { id: 'vadgaon', name: "Vadgaon", area: "Vadgaon", lat: 15.83359, lng: 74.52421 },
+  { id: 'angol', name: "Angol", area: "Angol", lat: 15.823, lng: 74.5031 },
+  { id: 'bhagya-nagar', name: "Bhagya Nagar", area: "Bhagya Nagar", lat: 15.83068, lng: 74.50668 },
+  { id: 'rani-chennamma-nagar', name: "Rani Chennamma Nagar", area: "Udyambag side", lat: 15.8271, lng: 74.4907 },
+  { id: 'jnmc-kles-nehru-nagar', name: "KLE Hospital / JNMC, Nehru Nagar", area: "Nehru Nagar", lat: 15.8879, lng: 74.51992 },
+  { id: 'sadashiv-nagar', name: "Sadashiv Nagar", area: "Sadashiv Nagar", lat: 15.8783, lng: 74.50848 },
+  { id: 'mahantesh-nagar', name: "Mahantesh Nagar", area: "Mahantesh Nagar", lat: 15.87714, lng: 74.53318 },
+  { id: 'ramteerth-nagar', name: "Ramteerth Nagar", area: "Ramteerth Nagar", lat: 15.88523, lng: 74.54242 },
+  { id: 'ksca-stadium', name: "KSCA Stadium", area: "Ramteerth Nagar", lat: 15.88564, lng: 74.54633 },
+  { id: 'gandhi-nagar', name: "Gandhi Nagar", area: "Gandhi Nagar", lat: 15.86238, lng: 74.53185 },
+  { id: 'udyambag', name: "Udyambag", area: "Udyambag", lat: 15.81746, lng: 74.49263 },
+  { id: 'machhe', name: "Machhe", area: "Machhe", lat: 15.79159, lng: 74.48406 },
+  { id: 'vtu', name: "Visvesvaraya Technological University", area: "Jnana Sangama", lat: 15.7773, lng: 74.46486 },
+  { id: 'piranwadi', name: "Piranwadi", area: "Piranwadi", lat: 15.80046, lng: 74.4791 },
+  { id: 'hindalga', name: "Hindalga", area: "Hindalga", lat: 15.87343, lng: 74.47427 },
+  { id: 'kanbargi-pond', name: "Kanbargi Pond", area: "Kanbargi", lat: 15.89132, lng: 74.55407 },
+  { id: 'auto-nagar', name: "Auto Nagar", area: "Auto Nagar", lat: 15.89419, lng: 74.54309 },
+  { id: 'airport', name: "Belagavi Airport (Sambra)", area: "Sambra", lat: 15.86308, lng: 74.61119 },
+  { id: 'suvarna-soudha', name: "Suvarna Vidhana Soudha", area: "Halaga", lat: 15.81365, lng: 74.57038 },
+  { id: 'kakati', name: "Kakati", area: "Kakati", lat: 15.93267, lng: 74.52555 },
 ]
 
-export const BLR_CENTER: [number, number] = [12.955, 77.625]
+export const CITY_CENTER: [number, number] = [15.855, 74.52]
+export const CITY_NAME = 'Belagavi'
 
 /** Demo service area, same box the server enforces in update_location. */
-export const inDemoArea = (lat: number, lng: number) => lat >= 12.7 && lat <= 13.2 && lng >= 77.4 && lng <= 77.9
+export const inDemoArea = (lat: number, lng: number) => lat >= 15.7 && lat <= 16.0 && lng >= 74.4 && lng <= 74.7
 
 const metres = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
   const r = Math.PI / 180, x = (b.lng - a.lng) * r * Math.cos(((a.lat + b.lat) / 2) * r), y = (b.lat - a.lat) * r

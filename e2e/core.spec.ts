@@ -25,10 +25,10 @@ async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
 
 async function requestCab(page: Page) {
   // new first-run flow: search a pickup landmark, then a destination (no GPS in headless runs)
-  await page.getByPlaceholder('Search a pickup landmark').fill('Forum')
-  await page.getByRole('button', { name: /^Forum Mall/ }).click()
-  await page.getByPlaceholder('Search a destination').fill('MG Road Metro')
-  await page.getByRole('button', { name: /^MG Road Metro/ }).click()
+  await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
+  await page.getByRole('button', { name: /^Rani Channamma Circle/ }).click()
+  await page.getByPlaceholder('Search a destination').fill('Railway Station')
+  await page.getByRole('button', { name: /^Belagavi Railway Station/ }).click()
   const cab = page.getByRole('radio', { name: /^Cab/ })
   await expect(cab).toBeVisible()
   await cab.click()
@@ -47,7 +47,7 @@ test('rider books a cab and a simulated captain completes the full lifecycle', a
   await expect(page.getByRole('heading', { name: 'Completed' })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText('Estimated total')).toBeVisible()
   await page.getByRole('button', { name: 'Ride history' }).click()
-  await expect(page.getByRole('dialog', { name: 'Your rides' }).getByText('from Forum Mall', { exact: false })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Your rides' }).getByText('from Rani Channamma Circle', { exact: false })).toBeVisible()
   const events = sql(`select string_agg(type, ',' order by id) from ride_events`)
   expect(events).toContain('status_completed')
 })
@@ -64,7 +64,7 @@ test('real captain receives, declines -> auto reassignment; next offer accepted 
 
   const offer = cap.getByRole('alertdialog')
   await expect(offer).toBeVisible({ timeout: 15_000 })
-  await expect(offer).toContainText('Forum Mall')
+  await expect(offer).toContainText('Rani Channamma Circle')
   await cap.screenshot({ path: 'e2e/shots/captain-offer.png' })
 
   sql(`update driver_profiles set online = true where vehicle_category = 'cab' and is_simulated;`)

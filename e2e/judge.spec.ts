@@ -50,7 +50,7 @@ test('Zones: forecast, surge formula, what-if rain changes the forecast', async 
   await judge(page)
   await page.getByRole('tab', { name: /Zones/ }).click()
   await expect(page.getByText('HistGradientBoostingRegressor')).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'MG Road' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Khade Bazar / City Centre' })).toBeVisible()
   await page.getByLabel('What-if scenario').selectOption('heavy_rain')
   await expect(page.getByRole('columnheader', { name: 'Before event' })).toBeVisible()
   await page.screenshot({ path: 'e2e/shots/judge-zones.png', fullPage: true })

@@ -15,7 +15,7 @@
 | E. Reassignment | Rider tracker, Judge › Chaos |
 
 ## Assumptions
-Bengaluru demo area with 8 zones and about 20 named places. About 15 seeded drivers across Bike/Auto/Cab. All demand, weather, traffic, positions and surge are simulated. Currency is ₹, estimates only.
+Belagavi (Belgaum) demo area with 8 zones and 35 named places from OpenStreetMap. 17 seeded captains across Bike/Auto/Cab (16 simulated, 1 real login). Demo fares in docs/FARES.md. All demand, weather, traffic, positions and surge are simulated. Currency is ₹, estimates only.
 
 ## Non-goals
 Payments/wallets, live traffic or weather, turn-by-turn navigation, real GPS tracking, scheduling/rentals/outstation/parcel, tipping, multi-language, copying any competitor's branding or assets.
