@@ -194,9 +194,15 @@ begin
   end if;
   select coalesce(jsonb_agg(to_jsonb(r)), '[]') into ranking from (select * from public._rank(p_group) limit 5) r;
   for c in select * from public._rank(p_group) loop
-    -- lock the candidate; skip if someone else is dispatching to them right now
+    -- lock the candidate; skip if another transaction holds them (being dispatched to, accepting, going offline)
     perform 1 from public.driver_profiles where user_id = c.driver_id for update skip locked;
     if not found then continue; end if;
+    -- revalidate under the lock: the ranking above is a snapshot and may already be stale
+    if not exists (select 1 from public.driver_profiles dp where dp.user_id = c.driver_id and dp.online)
+       or exists (select 1 from public.trip_groups a where a.driver_id = c.driver_id and a.status in ('accepted','arriving','ongoing'))
+       or exists (select 1 from public.ride_offers o where o.driver_id = c.driver_id and o.outcome = 'pending') then
+      continue;
+    end if;
     begin
       insert into public.ride_offers(group_id, driver_id, attempt_no, score, components, summary, expires_at)
       values (p_group, c.driver_id, g.attempt_no + 1, c.score,
@@ -396,9 +402,20 @@ end $$;
 create function public.set_online(p_online boolean) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
+  -- The captain's row lock is the same lock dispatch takes before offering, so "go offline" and
+  -- "offer this captain a ride" cannot interleave: whichever commits first is seen by the other.
+  perform 1 from public.driver_profiles where user_id = auth.uid() for update;
+  if not found then raise exception 'forbidden'; end if;
+  if not p_online then
+    if exists (select 1 from public.trip_groups where driver_id = auth.uid() and status in ('accepted','arriving','ongoing')) then
+      raise exception 'conflict: finish or cancel your current trip before going offline';
+    end if;
+    if exists (select 1 from public.ride_offers where driver_id = auth.uid() and outcome = 'pending') then
+      raise exception 'conflict: respond to your pending ride request before going offline';
+    end if;
+  end if;
   update public.driver_profiles set online = p_online, idle_since = case when p_online then now() else null end
   where user_id = auth.uid();
-  if not found then raise exception 'forbidden'; end if;
 end $$;
 
 create function public.update_location(p_lat float8, p_lng float8) returns void

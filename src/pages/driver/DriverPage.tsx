@@ -98,7 +98,7 @@ export default function DriverPage() {
                 <Label htmlFor="online" className="text-base">{me.data.online ? "You're online" : "You're offline"}</Label>
                 <p className="text-xs text-muted-foreground">{CAT_LABEL[me.data.vehicle_category]} · {me.data.vehicle_label} · <span className="font-mono">{me.data.plate}</span></p>
               </div>
-              <Switch id="online" checked={me.data.online} disabled={toggle.isPending || !!group.data} onCheckedChange={(v) => toggle.mutate(v)} />
+              <Switch id="online" checked={me.data.online} disabled={toggle.isPending || !!group.data || !!offer.data} onCheckedChange={(v) => toggle.mutate(v)} />
             </div>
           )}
           <Tabs defaultValue="now" className="mt-4">

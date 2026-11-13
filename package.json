@@ -14,7 +14,8 @@
     "db:reset": "pnpm dlx supabase@3.1.0 db reset",
     "db:start": "pnpm dlx supabase@3.1.0 start",
     "e2e": "playwright test",
-    "arena:report": "vite-node scripts/arena-report.ts"
+    "arena:report": "vite-node scripts/arena-report.ts",
+    "db:concurrency": "vite-node supabase/tests/concurrency.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
