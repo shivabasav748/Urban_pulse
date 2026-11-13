@@ -26,7 +26,17 @@ async function session(email: string, signUpAsRider = false): Promise<Session> {
 }
 
 /** Fire all calls together, each after 0-4 ms of random jitter. */
-const fire = (calls: (() => Promise<unknown>)[]) => Promise.allSettled(calls.map(async (c) => { await sleep(Math.random() * 4); return c() }))
+const fire = async (calls: (() => Promise<unknown>)[]) => {
+  const rs = await Promise.allSettled(calls.map(async (c) => { await sleep(Math.random() * 4); return c() }))
+  // errors caught inside sweep_exceptions (incl. deadlocks) never reach the Postgres log: collect them from its result
+  for (const r of rs) {
+    const items = r.status === 'fulfilled' ? ((r.value as { errors?: { step: string; error: string }[] } | null)?.errors ?? []) : []
+    for (const it of items) { roundItemErrors.push(`${it.step}: ${it.error}`); if (/deadlock/.test(it.error)) caughtDeadlocks++ }
+  }
+  return rs
+}
+let roundItemErrors: string[] = []
+let caughtDeadlocks = 0
 const errs = (rs: PromiseSettledResult<unknown>[]) => rs.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason?.message ?? r.reason))
 
 function setup(online: Session[], extra = '') {
@@ -62,8 +72,9 @@ async function scenario(name: string, rounds: number, run: Round) {
   const outcomes: Record<string, number> = {}, samples: string[] = []
   let failed = 0
   for (let i = 0; i < rounds; i++) {
+    roundItemErrors = []
     const { outcome, problems } = await run()
-    const all = [...problems, ...violations()]
+    const all = [...problems, ...violations(), ...(roundItemErrors.length ? [`sweep item errors: ${[...new Set(roundItemErrors)].join(', ')}`] : [])]
     outcomes[outcome] = (outcomes[outcome] ?? 0) + 1
     if (all.length) { failed++; if (samples.length < 3) samples.push(`round ${i + 1} [${outcome}]: ${all.join('; ')}`) }
   }
@@ -188,22 +199,23 @@ async function main() {
         caps.slice(5, 7).map((c, i) => `update driver_profiles set online = true, lat = ${PICK.lat - 0.002 * (i + 1)}, lng = ${PICK.lng} where user_id = '${c.id}';`).join(''))
       const rs = await fire(riders.slice(0, 4).map((r) => () => r.rpc('sweep_exceptions')))
       const problems = errs(rs).map((m) => `unexpected error: ${m}`)
-      const swept = (rs.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ errors?: unknown[] }>[]).flatMap((r) => r.value?.errors ?? [])
-      if (swept.length) problems.push(`sweep reported item errors: ${JSON.stringify(swept).slice(0, 200)}`)
       const n = one(`select count(*) from ride_events where type = 'offer_no_response'`)
       if (n !== '5') problems.push(`each expired offer must time out exactly once, got ${n} events`)
       return { outcome: one(`select count(*) filter (where status = 'offered') || ' re-offered, ' || count(*) filter (where status = 'no_driver_found') || ' no driver' from trip_groups`), problems }
     })
   } finally {
-    const deadlocks = execSync(`docker logs ${DB} --since ${since} 2>&1`, { maxBuffer: 64 * 1024 * 1024 }).toString().split('\n').filter((l) => /deadlock detected/.test(l)).length
+    // restore demo state first, so a later failure (e.g. reading the log) can never leave the demo dirty
     sql(`delete from ride_events where true; delete from ride_offers where true; delete from trip_group_members where true;
          delete from trip_groups where true; delete from rides where true;
          delete from auth.users where email like 'conc%@test.up';
-         update settings set fast_demo = true, offer_timeout_s = 15 where id;
+         update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 8 where id;
          update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng, idle_since = now() - make_interval(mins => s.seed_idle_min) from demo_driver_seed s where s.user_id = d.user_id;`)
+    let deadlocks: number | string
+    try { deadlocks = execSync(`docker logs ${DB} --since ${since} 2>&1`, { maxBuffer: 64 * 1024 * 1024 }).toString().split('\n').filter((l) => /deadlock detected/.test(l)).length }
+    catch { deadlocks = 'unknown (container log unreadable)' }
     const rounds = results.reduce((s, r) => s + r.rounds, 0), failed = results.reduce((s, r) => s + r.failed, 0)
-    console.log(`\n${results.filter((r) => !r.failed).length}/${results.length} scenarios passed, ${rounds - failed}/${rounds} rounds, ${deadlocks} deadlocks in Postgres log, ${((Date.now() - t0) / 1000).toFixed(0)}s`)
-    if (failed || deadlocks) process.exitCode = 1
+    console.log(`\n${results.filter((r) => !r.failed).length}/${results.length} scenarios passed, ${rounds - failed}/${rounds} rounds, deadlocks: ${deadlocks} uncaught (Postgres log) + ${caughtDeadlocks} caught inside sweep_exceptions, ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+    if (failed || deadlocks || caughtDeadlocks) process.exitCode = 1
   }
 }
 main().catch((e) => { console.error(e); process.exit(1) })
