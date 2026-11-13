@@ -55,7 +55,7 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --primary: oklch(0.46 0.09 190);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
@@ -66,7 +66,7 @@
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: oklch(0.6 0.1 190);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -131,3 +131,6 @@
     @apply font-sans;
     }
 }
+/* map + app */
+.leaflet-container { font-family: var(--font-sans); background: oklch(0.96 0.005 190); }
+.up-pin { display: grid; place-items: center; border-radius: 9999px; border: 2px solid white; box-shadow: 0 1px 4px rgb(0 0 0 / .35); color: white; font: 600 11px/1 var(--font-sans); }

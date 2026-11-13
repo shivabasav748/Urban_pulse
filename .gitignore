@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 !.env.example
 supabase/.temp
 ml/.venv
+/test-results/
+/playwright-report/
+/e2e/shots/

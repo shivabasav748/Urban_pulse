@@ -63,11 +63,13 @@ begin
     raw = least(greatest(1 + 0.15 * greatest(0, forecast / greatest(supply, 1) - 1), 1), s.surge_cap),
     raw_prev = least(greatest(1 + 0.15 * greatest(0, coalesce((select pf.predicted from public.demand_forecasts pf
         where pf.zone_id = _zi.zone_id and pf.target_ts = t - interval '30 min' and pf.scenario = p_scenario), forecast)
-        / greatest(supply, 1) - 1), 1), s.surge_cap);
+        / greatest(supply, 1) - 1), 1), s.surge_cap)
+  where true;  -- pg_safeupdate needs a WHERE
   update _zi set smoothed = round(s.surge_alpha * raw + (1 - s.surge_alpha) * raw_prev, 3),
                  raw = round(raw, 3), raw_prev = round(raw_prev, 3),
                  risk = case when forecast > 2 * greatest(supply,1) then 'high'
-                             when forecast > greatest(supply,1) then 'medium' else 'low' end;
+                             when forecast > greatest(supply,1) then 'medium' else 'low' end
+  where true;
 
   -- greedy repositioning: biggest gap first, nearest idle driver from a surplus zone
   create temp table if not exists _pool(driver_id uuid, zone_id smallint, lat float8, lng float8, used bool) on commit drop;
@@ -484,7 +486,8 @@ begin
     offer_timeout_s = coalesce((p->>'offer_timeout_s')::int, offer_timeout_s),
     fast_demo = coalesce((p->>'fast_demo')::boolean, fast_demo),
     surge_cap = coalesce((p->>'surge_cap')::numeric, surge_cap),
-    sim_clock = coalesce((p->>'sim_clock')::timestamptz, sim_clock);
+    sim_clock = coalesce((p->>'sim_clock')::timestamptz, sim_clock)
+  where id;
 end $$;
 
 create function public.apply_repositioning(p_scenario text default 'base') returns jsonb
@@ -596,8 +599,8 @@ create function public.demo_reset() returns void
 language plpgsql security definer set search_path = '' as $$
 begin
   perform public._require_admin();
-  delete from public.ride_events; delete from public.ride_offers; delete from public.trip_group_members;
-  delete from public.trip_groups; delete from public.rides;
+  delete from public.ride_events where true; delete from public.ride_offers where true; delete from public.trip_group_members where true;
+  delete from public.trip_groups where true; delete from public.rides where true;
   update public.driver_profiles set lat = home_lat, lng = home_lng, online = true, trips_today = seed_trips,
     offers_received = 10, offers_accepted = seed_accepted, idle_since = now() - make_interval(mins => seed_idle_min)
   from public.demo_driver_seed s where s.user_id = driver_profiles.user_id;
