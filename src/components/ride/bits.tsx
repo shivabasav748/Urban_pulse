@@ -125,7 +125,8 @@ export function Empty({ children, className, icon }: { children: ReactNode; clas
 
 /** Inline query failure with a way to recover. */
 export function LoadError({ what, error, retry }: { what: string; error: unknown; retry?: () => void }) {
-  const msg = error instanceof Error ? error.message : String(error)
+  // Supabase/PostgREST errors are plain objects with a message, not Error instances
+  const msg = error instanceof Error ? error.message : (error as { message?: string } | null)?.message ?? String(error)
   const offline = /fetch|network/i.test(msg)
   return (
     <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-danger-soft px-3 py-2.5 text-sm text-destructive">

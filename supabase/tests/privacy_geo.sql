@@ -23,8 +23,13 @@ create function pg_temp.place(who uuid, d_m float8, src text, acc numeric, age_s
 create function pg_temp.group_for(radius int, cat text default 'cab') returns uuid language sql as $$
   insert into public.trip_groups(category, search_radius_m, stops) values (cat, radius,
     '[{"type":"pickup","label":"P","lat":12.9346,"lng":77.6113},{"type":"drop","label":"D","lat":12.9755,"lng":77.6068}]') returning id $$;
-create function pg_temp.ranked(who uuid, radius int, cat text default 'cab') returns boolean language sql as $$
-  select exists (select 1 from public._rank(pg_temp.group_for(radius, cat)) r where r.driver_id = who) $$;
+-- two statements on purpose: _rank is STABLE and only sees rows committed to the snapshot its statement started with
+create function pg_temp.ranked(who uuid, radius int, cat text default 'cab') returns boolean language plpgsql volatile as $$
+declare gid uuid;
+begin
+  gid := pg_temp.group_for(radius, cat);
+  return exists (select 1 from public._rank(gid) r where r.driver_id = who);
+end $$;
 create function pg_temp.check(ok boolean, what text) returns void language plpgsql as $$
 begin if ok then raise notice 'PASS: %', what; else raise exception 'FAIL: %', what; end if; end $$;
 
@@ -102,11 +107,12 @@ select pg_temp.check((select count(*) from public.driver_profiles) = 17, 'admin/
 reset role;
 
 -- ===== location updates =====
-select pg_temp.place(:'cap', 0, 'gps', 10, 2);
+-- last GPS fix 60 s ago: a 0.5 km move is ~22 km/h (valid); the 11 km jump below is ~500 km/h (rejected)
+select pg_temp.place(:'cap', 0, 'gps', 10, 60);
 select set_config('request.jwt.claims', json_build_object('sub', :'cap', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$ begin
-  perform public.update_location(13.0358, 77.597, 10, 'gps'); -- ~11 km in 2 s
+  perform public.update_location(13.0358, 77.597, 10, 'gps'); -- ~11 km in 60 s
   raise exception 'FAIL: GPS teleport accepted';
 exception when others then if sqlerrm like 'FAIL%' then raise; end if; raise notice 'PASS: implausible GPS jump rejected (%)', sqlerrm;
 end $$;
