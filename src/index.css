@@ -128,3 +128,8 @@
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .up-pin { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9999px; border: 2px solid white; box-shadow: 0 1px 4px rgb(15 23 42 / .35); color: white; font: 700 12px/1 var(--font-sans); }
+.up-veh { position: relative; }
+.up-veh-rot { position: absolute; inset: 0; display: grid; place-items: center; filter: drop-shadow(0 6px 4px rgb(15 23 42 / .35)) drop-shadow(0 1px 1px rgb(15 23 42 / .4)); will-change: transform; }
+.up-veh-halo { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; border-radius: 9999px; background: radial-gradient(circle, rgb(20 184 166 / .28), transparent 70%); }
+@media (prefers-reduced-motion: no-preference) { .up-veh-halo { animation: up-halo 2s ease-out infinite; } }
+@keyframes up-halo { 0% { transform: scale(.6); opacity: 1 } 100% { transform: scale(1.4); opacity: 0 } }

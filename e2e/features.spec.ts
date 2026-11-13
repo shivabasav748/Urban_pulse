@@ -14,11 +14,12 @@ test.beforeEach(() => sql(`
   delete from safety_report_audit where true; delete from safety_reports where true; delete from safety_feedback where true;
   delete from reposition_moves where true; delete from ride_events where true; delete from ride_offers where true; delete from trip_group_members where true;
   delete from trip_groups where true; delete from rides where true; delete from captain_preferences where not simulated;
+  update captain_preferences set women_riders_optin = true where simulated;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng, zone_changed_at = null, op_zone = _zone_of(s.home_lat, s.home_lng)
     from demo_driver_seed s where s.user_id = d.user_id;
-  update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 2, dispatch_policy = 'urban_pulse', last_reposition_at = null,
+  update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 2, dispatch_policy = 'urban_pulse', last_reposition_at = now() + interval '1 hour',
     sim_clock = '2026-11-12 18:00+05:30' where id;`))
-test.afterAll(() => sql(`update settings set auto_accept_s = 8, offer_timeout_s = 15 where id; delete from reposition_moves where true;
+test.afterAll(() => sql(`update settings set auto_accept_s = 8, offer_timeout_s = 15, last_reposition_at = null where id; delete from reposition_moves where true;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng, zone_changed_at = null from demo_driver_seed s where s.user_id = d.user_id;`))
 
 async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
@@ -27,7 +28,7 @@ async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
   await page.waitForURL(/#\/(rider|driver|judge)/)
 }
 async function route(page: Page, cat: 'Bike' | 'Auto' | 'Cab') {
-  await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
+  await page.getByRole('button', { name: /^Pickup point/ }).click(); await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
   await page.getByRole('button', { name: /^Rani Channamma Circle/ }).last().click()   // landmark list follows "Recent"
   await page.getByPlaceholder('Search a destination').fill('Railway Station')
   await page.getByRole('button', { name: /^Belagavi Railway Station/ }).last().click()
@@ -40,7 +41,7 @@ test('rider books a bike and an auto: each is matched automatically to the right
   for (const cat of ['Bike', 'Auto'] as const) {
     await route(page, cat)
     await page.getByRole('button', { name: new RegExp(`^Confirm ${cat}`) }).click()
-    await expect(page.getByRole('heading', { name: /captain/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /captain|Waiting for acceptance|Booking confirmed/i })).toBeVisible()
     await expect.poll(() => sql(`select dp.vehicle_category from ride_offers o join driver_profiles dp on dp.user_id = o.driver_id order by o.offered_at desc limit 1`)).toBe(cat.toLowerCase())
     await page.getByRole('button', { name: /Cancel ride/ }).click()
     await expect(page.getByRole('button', { name: 'Book another ride' })).toBeVisible()
@@ -58,22 +59,23 @@ test('rider asks for a woman driver: only an opted-in captain is offered the rid
   await expect(page.getByText('Woman driver requested. We will ask before matching anyone else.')).toBeVisible()
   await page.getByRole('button', { name: /^Confirm Bike/ }).click()
   await expect(page.getByText('Woman driver requested', { exact: true })).toBeVisible()
-  await expect.poll(offeredPlate).toBe('KA-SIM-009') // the only opted-in bike within 2 km (SIMULATED demo opt-in)
+  await expect.poll(offeredPlate).toBe('KA-SIM-010') // Sneha: the opted-in woman bike captain near the pickup (SIMULATED demo opt-in)
   expect(sql(`select women_driver_pref from rides`)).toBe('t')
 })
 
 test('no eligible woman driver: the rider chooses; keep waiting, then remove the preference and get any captain', async ({ page }) => {
+  sql(`update captain_preferences cp set women_riders_optin = false from driver_profiles d where d.user_id = cp.user_id and d.vehicle_category = 'cab';`)
   await login(page, 'Rider')
   await route(page, 'Cab')
   await page.getByRole('switch', { name: 'Prefer a woman driver' }).click()
   await page.getByRole('button', { name: /^Confirm Cab/ }).click()
-  await expect(page.getByRole('heading', { name: 'No suitable captains available right now' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No captain found' })).toBeVisible()
   await expect(page.getByText(/No woman captain is free near your pickup/)).toBeVisible()
   expect(sql(`select count(*) from ride_offers`)).toBe('0')   // nobody ineligible was offered it
   await page.getByRole('button', { name: 'Keep waiting for a woman captain' }).click()
   await expect(page.getByRole('heading', { name: 'Still looking for a woman captain' })).toBeVisible()
   await page.getByRole('button', { name: 'Search all captains instead' }).click()
-  await expect(page.getByRole('heading', { name: /Captain assigned|Captain notified|Captain on the way|On trip/ })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('heading', { name: /Booking confirmed|Waiting for acceptance|Your captain is on the way|On trip/ })).toBeVisible({ timeout: 20_000 })
   expect(sql(`select women_driver_pref from rides`)).toBe('f')
   expect(sql(`select string_agg(type, ',' order by id) from ride_events`)).toMatch(/no_driver_found,search_restarted.*search_restarted,offer_created/)
 })
@@ -100,7 +102,7 @@ test('peak shortage: the system recommends repositioning and the captain accepts
   await login(page, 'Captain')
   const judge = await (await browser.newContext()).newPage()
   await login(judge, 'Judge')
-  await expect(judge.getByText('Peak', { exact: true }).first()).toBeVisible()
+  await expect(judge.getByText(/· busy$/).first()).toBeVisible()
   await judge.getByRole('button', { name: 'Run repositioning now' }).click()
   await expect(judge.getByText(/Repositioning pass: [1-9]/)).toBeVisible()
   await expect(page.getByText(/^Suggested: move to /)).toBeVisible({ timeout: 15_000 })
@@ -131,7 +133,7 @@ test('rider gives safety feedback and reports a safety concern; the judge review
   await login(page, 'Rider')
   await route(page, 'Cab')
   await page.getByRole('button', { name: /^Confirm Cab/ }).click()
-  await expect(page.getByRole('heading', { name: "You've arrived" })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 60_000 })
   await page.getByRole('radio', { name: '4: Safe' }).click()
   await page.getByRole('radio', { name: '5: Very safe' }).first().click()
   await page.getByRole('button', { name: 'Send feedback' }).click()

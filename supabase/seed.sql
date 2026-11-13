@@ -54,17 +54,17 @@ declare r record; uid uuid; i int := 0;
 begin
   for r in select * from (values
     ('Arjun','cab',   15.8630,74.5175, 6, 10,  2), ('Meera','cab',  15.8510,74.5105, 1,  7, 25),
-    ('Kiran','cab',   15.8385,74.5040, 4,  9, 10), ('Farah','cab',  15.8860,74.5170, 2,  8, 18),
-    ('Vikram','cab',  15.8350,74.5220, 5,  6,  4), ('Lakshmi','cab',15.8190,74.4950, 0,  9, 30),
+    ('Kiran','cab',   15.8385,74.5040, 4,  9, 10), ('Farah','cab',  15.8760,74.5160, 2,  8, 18),
+    ('Vikram','cab',  15.8350,74.5220, 5,  6,  4), ('Lakshmi','cab',15.8030,74.4870, 0,  9, 30),
     ('Imran','cab',   15.7900,74.4820, 3,  9,  8), ('Divya','cab',  15.8620,74.6080, 2, 10, 12),
-    ('Rahul','bike',  15.8600,74.5130, 7, 10,  1), ('Sneha','bike', 15.8400,74.5000, 2,  8, 20),
-    ('Joseph','bike', 15.8800,74.5220, 4,  5, 14), ('Pooja','bike', 15.8410,74.5170, 1,  9, 22),
+    ('Rahul','bike',  15.8600,74.5130, 7, 10,  1), ('Sneha','bike', 15.8700,74.5150, 2,  8, 20),
+    ('Joseph','bike', 15.7990,74.4830, 4,  5, 14), ('Pooja','bike', 15.7960,74.4790, 1,  9, 22),
     ('Naveen','auto', 15.8645,74.5200, 3,  8,  9), ('Ayesha','auto',15.8770,74.5320, 5,  9,  3),
-    ('Suresh','auto', 15.8840,74.5440, 0,  7, 28), ('Tanvi','auto', 15.8250,74.5040, 2, 10, 16)
+    ('Suresh','auto', 15.8000,74.4790, 0,  7, 28), ('Tanvi','auto', 15.8010,74.4850, 2, 10, 16)
   ) v(name, cat, lat, lng, trips, acc, idle) loop
     i := i + 1;
     uid := pg_temp.mk_user(lower(r.name) || '@sim.up', 'Captain ' || r.name, 'driver', r.cat);
-    update public.driver_profiles set lat = r.lat, lng = r.lng, online = true, is_simulated = true,
+    update public.driver_profiles set lat = r.lat, lng = r.lng, online = true, is_simulated = true, location_source = 'simulated',
       vehicle_label = case r.cat when 'cab' then 'Sedan (sim)' when 'auto' then 'Auto (sim)' else 'Bike (sim)' end,
       plate = 'KA-SIM-' || lpad(i::text, 3, '0'),
       trips_today = r.trips, offers_received = 10, offers_accepted = r.acc, idle_since = now() - make_interval(mins => r.idle)
@@ -73,11 +73,11 @@ begin
   end loop;
 end $$;
 
--- SIMULATED demo opt-ins for the women-driver preference (see migration 0007): a fixed, name-independent subset
--- of simulated captains (every third plate). Real accounts never get a seeded opt-in.
+-- SIMULATED demo opt-ins for the women-driver preference (see migration 0014): the fictional simulated captains
+-- presented as women in the demo. Real accounts never get a seeded opt-in.
 insert into public.captain_preferences(user_id, women_riders_optin, consented_at, simulated, declaration)
 select dp.user_id, true, now(), true, 'simulated-demo-flag' from public.driver_profiles dp
-where dp.is_simulated and dp.plate in ('KA-SIM-003', 'KA-SIM-006', 'KA-SIM-009', 'KA-SIM-012', 'KA-SIM-015')
+where dp.is_simulated and dp.plate in ('KA-SIM-004', 'KA-SIM-006', 'KA-SIM-008', 'KA-SIM-010', 'KA-SIM-012', 'KA-SIM-014', 'KA-SIM-016')
 on conflict (user_id) do nothing;
 insert into public.captain_preference_audit(user_id, actor, action)
 select user_id, null, 'seed_simulated' from public.captain_preferences where simulated;

@@ -41,7 +41,7 @@ test('Allocation explains the decision and re-ranks when workload changes', asyn
   await judge(page)
   await page.getByRole('tab', { name: 'Chaos Mode' }).click()
   await page.getByRole('button', { name: /Create demo ride/ }).click()
-  await page.getByRole('tab', { name: 'Allocation' }).click()
+  await page.getByRole('tab', { name: 'Why this captain?' }).click()
   await expect(page.getByText(/^Why /)).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText(/Nearest-driver baseline would pick/)).toBeVisible()
   await page.screenshot({ path: 'e2e/shots/judge-allocation.png', fullPage: true })
@@ -49,7 +49,7 @@ test('Allocation explains the decision and re-ranks when workload changes', asyn
 
 test('Zones: forecast, surge formula, what-if rain changes the forecast', async ({ page }) => {
   await judge(page)
-  await page.getByRole('tab', { name: 'Forecast & what-if' }).click()
+  await page.getByRole('tab', { name: 'Forecast', exact: true }).click()
   await expect(page.getByText('HistGradientBoostingRegressor')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Khade Bazar / City Centre' })).toBeVisible()
   await page.getByLabel('What-if scenario').selectOption('heavy_rain')
@@ -88,10 +88,10 @@ test('Dispatch Arena runs three worlds on the same seed with per-metric verdicts
 
 test('Zone intelligence shows live demand vs supply, peak shortages and the repositioning feed', async ({ page }) => {
   await judge(page)
-  await expect(page.getByText('Demand vs supply, next 30 minutes')).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'Nehru Nagar / KLE' })).toBeVisible()
+  await expect(page.getByText('Which areas need captains in the next 30 minutes')).toBeVisible()
+  await expect(page.getByText('Nehru Nagar / KLE').first()).toBeVisible()
   await expect(page.getByText('Undersupplied').first()).toBeVisible()
-  await expect(page.getByText('Peak', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText(/· busy$/).first()).toBeVisible()
   await page.getByRole('button', { name: 'Run repositioning now' }).click()
   await expect(page.getByText(/Repositioning pass/)).toBeVisible()
   await page.screenshot({ path: 'e2e/shots/judge-zone-intel.png', fullPage: true })

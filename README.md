@@ -18,6 +18,16 @@ Intelligent ride matching and dynamic driver allocation (Hack Valley PS 02). Rid
 - **UI:** adopts the `UrbanPulse_jcr` design (the login screen is unchanged). The previous UI is kept in [docs/reference/ui-v1](docs/reference/ui-v1/README.md).
 - **Boundary research:** no verified municipal polygon was found. [Investigation](docs/research/BELAGAVI_MUNICIPAL_BOUNDARY_INVESTIGATION.md)
 
+## Booking and live trip (14 Nov)
+- **Your vehicle choice is final:** no silent swap to another vehicle type. Empty categories show "0 captains within 2 km", other vehicles are offered only as explicit choices, and the search can widen 2 → 3 → 5 km. "Booking confirmed" appears only once a captain's acceptance is saved. [Report](docs/DISPATCH_ACCURACY_AND_BOOKING_RELIABILITY_REPORT.md)
+- **Live search:** a running clock and "Try N of 5". In busy areas each captain gets 10 s before the next one is tried.
+- **Live trip:** a top-down vehicle drives along the road route (OpenStreetMap routing, display only) to the pickup, then to the drop. Riders can message their captain (chat during the trip only, no phone numbers shared) and open "Why this captain?": the real match score plus a clearly labelled made-up profile.
+- **Shared cab:** riders going the same way are paired automatically and each pays 25% less. Captains can accept, ignore or decline any request; if a captain cancels, the search restarts at once.
+- **Maps:** red, yellow and green zones show busy, moderate and quiet areas for riders and captains.
+- **Ride completed:** a trip summary (distance, time, fare), receipt, safety feedback and "Book another ride".
+- **Captain page:** online toggle, operational zone, traffic level, idle time, fair-share standing, the passenger's name, trip distance and time on the active trip, and a "ride completed" confirmation.
+- **Demo defaults:** pickup starts at JCER, Machhe (approximate position). A Responsive / Phone toggle previews the app inside a phone frame on desktop.
+
 ## Run locally
 Needs Node 22+, pnpm 10, and Docker Desktop running.
 

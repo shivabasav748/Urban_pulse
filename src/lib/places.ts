@@ -30,6 +30,8 @@ export const PLACES: Place[] = [
   { id: 'gandhi-nagar', name: "Gandhi Nagar", area: "Gandhi Nagar", lat: 15.86238, lng: 74.53185 },
   { id: 'udyambag', name: "Udyambag", area: "Udyambag", lat: 15.81746, lng: 74.49263 },
   { id: 'machhe', name: "Machhe", area: "Machhe", lat: 15.79159, lng: 74.48406 },
+  // JCER is not in OpenStreetMap; approximate position near Hunchyanatti Cross, Machhe (address from the college listing).
+  { id: 'jcer', name: "JCER (Jain College of Engineering and Research)", area: "Machhe · approximate", lat: 15.7975, lng: 74.4810 },
   { id: 'vtu', name: "Visvesvaraya Technological University", area: "Jnana Sangama", lat: 15.7773, lng: 74.46486 },
   { id: 'piranwadi', name: "Piranwadi", area: "Piranwadi", lat: 15.80046, lng: 74.4791 },
   { id: 'hindalga', name: "Hindalga", area: "Hindalga", lat: 15.87343, lng: 74.47427 },
@@ -39,6 +41,9 @@ export const PLACES: Place[] = [
   { id: 'suvarna-soudha', name: "Suvarna Vidhana Soudha", area: "Halaga", lat: 15.81365, lng: 74.57038 },
   { id: 'kakati', name: "Kakati", area: "Kakati", lat: 15.93267, lng: 74.52555 },
 ]
+
+/** Demo stand-in when a browser location fix is too coarse to use (desktop Wi-Fi fixes are often 1 km+ off). */
+export const DEMO_HOME_ID = 'jcer'
 
 export const CITY_CENTER: [number, number] = [15.855, 74.52]
 export const CITY_NAME = 'Belagavi'

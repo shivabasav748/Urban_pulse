@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { Car, Loader2, Shield, User } from 'lucide-react'
+import { Car, Loader2, Monitor, Shield, Smartphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Brand, SignOutButton, SimBadge } from '@/components/ride/bits'
 import { homeFor, useAuth, type Role } from '@/lib/auth'
@@ -75,12 +75,37 @@ export function Footer() {
 }
 
 /** Design layout for the rider and captain apps: map card on top, options directly below, same column on every width. */
+const FRAME_KEY = 'up.phoneFrame'
+const readFrame = () => { try { return localStorage.getItem(FRAME_KEY) === '1' } catch { return false } }
+
+/** Desktop helper: preview the rider/captain app inside a phone shell, or use the normal responsive column. */
+function ViewToggle({ phone, onChange }: { phone: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="mx-auto hidden w-full max-w-xl items-center justify-between gap-3 px-4 pt-3 text-xs text-slate-500 sm:flex">
+      <span>View: <b className="font-semibold text-teal-800">{phone ? 'Phone preview' : 'Responsive'}</b></span>
+      <div role="radiogroup" aria-label="Preview size" className="flex rounded-xl border bg-white p-0.5 shadow-xs">
+        {([[false, 'Responsive', Monitor], [true, 'Phone', Smartphone]] as const).map(([v, label, Icon]) => (
+          <button key={label} type="button" role="radio" aria-checked={phone === v} onClick={() => onChange(v)}
+            className={cn('flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              phone === v ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100')}>
+            <Icon className="size-3.5" aria-hidden />{label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function MapFirstLayout({ map, mapLabel, children, footer }: { map: ReactNode; mapLabel: ReactNode; children: ReactNode; footer?: ReactNode }) {
+  const [phone, setPhoneRaw] = useState(readFrame)
+  const setPhone = (v: boolean) => { setPhoneRaw(v); try { localStorage.setItem(FRAME_KEY, v ? '1' : '0') } catch { /* private mode */ } }
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <TopNav />
-      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-3 px-2 pt-3 pb-4 sm:px-4">
-        <div className="relative isolate h-[300px] overflow-hidden rounded-2xl border bg-slate-200 shadow-sm sm:h-[380px] sm:rounded-3xl">
+      <ViewToggle phone={phone} onChange={setPhone} />
+      <main className={cn('mx-auto flex w-full flex-1 flex-col gap-3 px-2 pt-3 pb-4 sm:px-4',
+        phone ? 'sm:my-3 sm:max-h-[860px] sm:max-w-[420px] sm:flex-none sm:overflow-y-auto sm:rounded-[2.75rem] sm:border-[10px] sm:border-slate-800 sm:bg-background sm:px-3 sm:shadow-2xl' : 'max-w-xl')}>
+        <div className="relative isolate h-[300px] shrink-0 overflow-hidden rounded-2xl border bg-slate-200 shadow-sm sm:h-[380px] sm:rounded-3xl">
           {map}
           <div className="pointer-events-none absolute top-2.5 left-2.5 z-[500] flex items-center gap-1.5 rounded-full border bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-xs backdrop-blur">
             {mapLabel}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowRight, Car, Check, CheckCircle2, Clock, Compass, Loader2, LocateFixed, MapPin, MapPinned, Navigation, Power, ShieldCheck, TrendingUp, Users, Wallet, X } from 'lucide-react'
-import { MapCanvas, ZONE_STATE_COLOR, type MapPin as Pin } from '@/components/map/MapCanvas'
+import { MapCanvas, TrafficLegend, ZONE_STATE_COLOR, type MapPin as Pin } from '@/components/map/MapCanvas'
 import { ActionBar, MapFirstLayout } from '@/components/layout/AppShell'
 import { CAT_LABEL, Empty, Eyebrow, LoadError, Panel, SimBadge, StatusChip, Tag, friendly } from '@/components/ride/bits'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useAuth } from '@/lib/auth'
+import { ContactButton } from '@/components/ride/Contact'
+import { TRAFFIC_COLOR, useTraffic, useTrafficLevel } from '@/lib/traffic'
 import { useLive, usePhone, useSweep } from '@/lib/hooks'
 import { rpc, supabase, type Ride, type RideStatus } from '@/lib/supabase'
-import { inr } from '@/lib/geo'
+import { ROAD_FACTOR, inr, km } from '@/lib/geo'
 import { rideEconomics } from '@/lib/economics'
 import { GEO_MESSAGE, GOOD_ACCURACY_M, useCurrentPosition, useWatchPosition, type Fix, type GeoStatus } from '@/lib/geolocation'
 import { inDemoArea } from '@/lib/places'
@@ -90,6 +92,13 @@ export default function DriverPage() {
     queryFn: async () => ((await supabase.from('rides').select('fare').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing'])).data ?? [])
       .reduce((sum, r) => sum + Number((r as { fare: { total: number } }).fare.total), 0),
   })
+  const tripRide = useQuery({ queryKey: ['trip-ride', uid, group.data?.id], enabled: !!group.data,
+    queryFn: async () => (await supabase.from('rides').select('id, rider_id, est_distance_km, est_trip_min').eq('driver_id', uid)
+      .in('status', ['accepted', 'arriving', 'ongoing']).order('requested_at').limit(1).maybeSingle()).data as
+      { id: string; rider_id: string; est_distance_km: number; est_trip_min: number } | null })
+  const riderName = useQuery({ queryKey: ['rider-name', tripRide.data?.rider_id], enabled: !!tripRide.data,
+    queryFn: async () => (await supabase.from('profiles').select('display_name').eq('id', tripRide.data!.rider_id).maybeSingle()).data?.display_name as string | undefined })
+  const maxTries = useQuery({ queryKey: ['max-attempts'], staleTime: 60_000, queryFn: async () => (await supabase.from('settings').select('max_attempts').single()).data?.max_attempts as number | undefined })
   const zones = useQuery({ queryKey: ['zone-view', uid], queryFn: () => rpc<ZoneView>('captain_zone_view') })
   const safety = useQuery({ queryKey: ['my-safety', uid], queryFn: () => rpc<SafetySummary>('captain_safety_summary', { p_driver: uid }) })
 
@@ -137,8 +146,9 @@ export default function DriverPage() {
     toggle.mutate(true)
   }
   const respond = useMutation({
-    mutationFn: (accept: boolean) => rpc('respond_offer', { p_offer: offer.data!.id, p_accept: accept }),
-    onSuccess: (_d, accept) => { if (!accept) toast('Declined. The request went to the next captain.'); qc.invalidateQueries() },
+    mutationFn: (a: 'accept' | 'decline' | 'ignore') => a === 'ignore' ? rpc('ignore_offer', { p_offer: offer.data!.id })
+      : rpc('respond_offer', { p_offer: offer.data!.id, p_accept: a === 'accept' }),
+    onSuccess: (_d, a) => { if (a !== 'accept') toast(a === 'ignore' ? 'Ignored. The request went straight to the next captain.' : 'Declined. The request went to the next captain.'); qc.invalidateQueries() },
     onError: onErr,
   })
   const advance = useMutation({ mutationFn: (to: RideStatus) => rpc('advance_trip', { p_group: group.data!.id, p_to: to }), onSuccess: () => qc.invalidateQueries(), onError: onErr })
@@ -156,6 +166,16 @@ export default function DriverPage() {
   const econ = (history.data ?? []).map((r) => rideEconomics({ category: r.category, fareTotal: Number(r.fare.total), gst: Number(r.fare.gst ?? 0),
     tripKm: Number(r.est_distance_km), pickupKm: Number(r.est_pickup_min ?? 0) * 25 / 60, tripMin: Number(r.est_trip_min), pickupMin: Number(r.est_pickup_min ?? 0) }))
   const sumE = (k: 'driverGross' | 'vehicleCost' | 'driverNet') => econ.reduce((s, e) => s + e[k], 0)
+  const traffic = useTraffic()
+  const tl = useTrafficLevel(zones.data?.physical_zone)
+  // "Ride completed" confirmation for the captain: the trip leaves the active list once it is completed
+  const prevTrip = useRef<string | null>(null)
+  const [justDone, setJustDone] = useState(false)
+  useEffect(() => {
+    const st = group.data?.status ?? null
+    if (!st && prevTrip.current === 'ongoing') { setJustDone(true); const t = setTimeout(() => setJustDone(false), 8000); prevTrip.current = null; return () => clearTimeout(t) }
+    prevTrip.current = st
+  }, [group.data?.status])
   const o = offer.data, g = group.data, next = g ? NEXT[g.status] : undefined
   const idleMin = me.data?.online && me.data.idle_since ? Math.max(0, Math.round((Date.now() - new Date(me.data.idle_since).getTime()) / 60000)) : null
   const sl = safetyLabel(safety.data)
@@ -164,8 +184,9 @@ export default function DriverPage() {
     <>
       <MapFirstLayout
         mapLabel={online ? <><span className="size-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />{locMode === 'gps' ? 'Live GPS' : 'Manual position'}</> : <>Offline · location not shared</>}
-        map={<MapCanvas drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined}
-          zones={target ? [{ id: target.zone_id, name: `Heading to ${target.name}`, lat: zoneCentre(target.zone_id).lat, lng: zoneCentre(target.zone_id).lng, color: ZONE_STATE_COLOR[target.state], strong: true }] : []}
+        map={<MapCanvas drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined} fitKey={g ? `${g.id}:${g.status}` : online ? 'online' : 'offline'}
+          legend={<TrafficLegend />}
+          zones={target ? [...traffic, { id: target.zone_id, name: `Heading to ${target.name}`, lat: zoneCentre(target.zone_id).lat, lng: zoneCentre(target.zone_id).lng, color: ZONE_STATE_COLOR[target.state], strong: true }] : traffic}
           onPick={online && locMode === 'manual' && !g ? (lat, lng) => { if (inDemoArea(lat, lng)) void sendLoc(lat, lng, null, 'manual') } : undefined} />}>
         {me.isLoading ? (
           <Panel><div className="space-y-3" aria-busy="true"><Skeleton className="h-12 w-48" /><Skeleton className="h-20 w-full rounded-2xl" /><Skeleton className="h-14 w-full rounded-2xl" /></div></Panel>
@@ -192,11 +213,18 @@ export default function DriverPage() {
               )}
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
               <div className="rounded-2xl border bg-surface p-3">
                 <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><MapPin className="size-3 text-teal-700" aria-hidden />Operational zone</div>
                 <div className="mt-1 truncate text-sm font-semibold">{zones.data?.op_zone_name ?? '…'}</div>
                 {zones.data && zones.data.physical_zone !== zones.data.op_zone && <div className="truncate text-[11px] text-slate-500">Now in {zones.data.physical_zone_name}</div>}
+              </div>
+              <div className="rounded-2xl border bg-surface p-3">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><Navigation className="size-3 text-indigo-600" aria-hidden />Traffic</div>
+                <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
+                  {tl && <span className="size-2 rounded-full" style={{ background: TRAFFIC_COLOR[tl.level] }} aria-hidden />}{tl?.label ?? '…'}
+                </div>
+                {tl && <div className="text-[11px] text-slate-500 num">~{tl.kmh} km/h (est.)</div>}
               </div>
               <div className="rounded-2xl border bg-surface p-3">
                 <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><Clock className="size-3 text-amber-600" aria-hidden />Idle time</div>
@@ -204,9 +232,15 @@ export default function DriverPage() {
               </div>
             </div>
 
-            <dl className="mt-3 grid grid-cols-3 gap-2 rounded-2xl border bg-surface p-3 text-center">
+            <dl className="mt-3 grid grid-cols-4 gap-2 rounded-2xl border bg-surface p-3 text-center">
               <div><dt className="text-[10px] text-slate-500">Trips today</dt><dd className="mt-0.5 text-sm font-bold num">{me.data.trips_today}</dd></div>
               <div><dt className="text-[10px] text-slate-500">Acceptance</dt><dd className="mt-0.5 text-sm font-bold text-teal-800 num">{acc}%</dd></div>
+              <div title="Fewer trips today scores higher on the workload part of matching, so work is shared fairly">
+                <dt className="text-[10px] text-slate-500">Fair share</dt>
+                <dd className={cn('mt-0.5 text-sm font-bold', me.data.trips_today <= 2 ? 'text-emerald-700' : me.data.trips_today <= 5 ? 'text-slate-800' : 'text-amber-700')}>
+                  {me.data.trips_today <= 2 ? 'Priority' : me.data.trips_today <= 5 ? 'Standard' : 'Busy day'}
+                </dd>
+              </div>
               <div><dt className="text-[10px] text-slate-500">Safety</dt><dd className="mt-0.5 text-sm font-bold num" title={sl.detail}>{safety.data?.published ? `${safety.data.overall?.toFixed(1)}/5` : '—'}</dd></div>
             </dl>
             <p className="mt-1.5 text-[11px] text-slate-500">Safety: {sl.detail}</p>
@@ -225,10 +259,21 @@ export default function DriverPage() {
           {g && (
             <Panel aria-label="Current trip">
               <div className="flex items-start justify-between gap-3 border-b pb-4">
-                <div><div className="flex items-center gap-2"><h2 className="text-base font-bold sm:text-lg">{next?.title ?? 'Current trip'}</h2><SimBadge /></div><StatusChip status={g.status} short /></div>
+                <div>
+                  <div className="flex items-center gap-2"><h2 className="text-base font-bold sm:text-lg">{next?.title ?? 'Current trip'}</h2><SimBadge /></div>
+                  <p className="mt-0.5 text-xs text-slate-500">Passenger: <b className="text-slate-800">{riderName.data ?? '…'}</b>{g.is_pool && ' + 1 co-rider'}</p>
+                  <div className="mt-1"><StatusChip status={g.status} short /></div>
+                </div>
                 {tripFare.data != null && <div className="text-right"><div className="text-[11px] text-slate-500">Fare (est.)</div><div className="font-mono text-lg font-black text-teal-800 num">{inr(tripFare.data)}</div></div>}
               </div>
               <div className="mt-4"><StopList stops={g.stops} numbered={g.is_pool} /></div>
+              {tripRide.data && (
+                <p className="mt-3 flex justify-between rounded-xl border bg-surface px-3 py-2 text-xs text-slate-600">
+                  <span>Distance <b className="text-slate-900 num">{Number(tripRide.data.est_distance_km).toFixed(1)} km</b></span>
+                  <span>Trip time <b className="text-slate-900 num">{Math.round(tripRide.data.est_trip_min)} min</b></span>
+                </p>
+              )}
+              {tripRide.data && <div className="mt-3"><ContactButton rideId={tripRide.data.id} me={uid} other={riderName.data ?? 'your rider'} as="captain" live /></div>}
               <ActionBar>
                 {next && (
                   <Button size="lg" className={cn('w-full', g.status === 'arriving' && 'bg-emerald-700 hover:bg-emerald-800')} disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
@@ -244,12 +289,17 @@ export default function DriverPage() {
             </Panel>
           )}
 
+          {justDone && !g && (
+            <p role="status" className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+              <CheckCircle2 className="size-5 shrink-0 text-emerald-600" aria-hidden />Ride completed. You are available for new bookings.
+            </p>
+          )}
           {!g && <ZonePanel view={zones.data} loading={zones.isLoading} error={zones.error} refetch={() => zones.refetch()} online={online} />}
           {!me.data.is_simulated && <WomenRidersOptIn uid={uid} />}
         </>}
       </MapFirstLayout>
 
-      {o && <OfferCard offer={o} busy={respond.isPending} onRespond={(a) => respond.mutate(a)} />}
+      {o && <OfferCard offer={o} maxTries={maxTries.data ?? 5} busy={respond.isPending} onRespond={(a) => respond.mutate(a)} />}
 
       <Sheet open={earningsOpen} onOpenChange={setEarningsOpen}>
         <SheetContent side={phone ? 'bottom' : 'right'} className={cn('bg-white', phone && 'max-h-[85dvh] rounded-t-3xl pb-[env(safe-area-inset-bottom)]')}>
@@ -289,7 +339,7 @@ const ZC: Record<number, { lat: number; lng: number }> = {
 }
 const zoneCentre = (id: number) => ZC[id] ?? ZC[1]
 
-function OfferCard({ offer: o, busy, onRespond }: { offer: Offer; busy: boolean; onRespond: (accept: boolean) => void }) {
+function OfferCard({ offer: o, maxTries, busy, onRespond }: { offer: Offer; maxTries: number; busy: boolean; onRespond: (a: 'accept' | 'decline' | 'ignore') => void }) {
   const { s, pct } = useSecondsLeft(o.offered_at, o.expires_at)
   return (
     <div className="fixed inset-x-0 bottom-0 z-[1200] p-3 sm:right-6 sm:bottom-6 sm:left-auto sm:w-[420px] sm:p-0 motion-safe:animate-in motion-safe:slide-in-from-bottom">
@@ -300,8 +350,8 @@ function OfferCard({ offer: o, busy, onRespond }: { offer: Offer; busy: boolean;
         </div>
         <div className="flex items-center justify-between border-b pb-3">
           <div>
-            <div className="flex items-center gap-2"><span id="offer-title" className="text-xs font-bold tracking-wider text-teal-800 uppercase">New {o.summary.is_pool ? 'pooled ' : ''}ride request</span><SimBadge /></div>
-            <div className="mt-0.5 font-mono text-xs text-slate-500">Attempt {o.attempt_no}</div>
+            <div className="flex items-center gap-2"><span id="offer-title" className="text-xs font-bold tracking-wider text-teal-800 uppercase">New {o.summary.is_pool ? 'shared ' : ''}ride request</span><SimBadge /></div>
+            <div className="mt-0.5 font-mono text-xs text-slate-500">Attempt {o.attempt_no} of {maxTries}</div>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg border bg-slate-100 px-2.5 py-1" aria-live="off">
             <Clock className={cn('size-3.5', s <= 5 ? 'text-rose-600 motion-safe:animate-pulse' : 'text-teal-700')} aria-hidden />
@@ -310,15 +360,17 @@ function OfferCard({ offer: o, busy, onRespond }: { offer: Offer; busy: boolean;
         </div>
         <div id="offer-summary" className="my-4 flex items-center justify-between rounded-2xl border bg-surface p-3.5">
           <div><div className="text-[11px] text-slate-500">Estimated fare</div><div className="font-mono text-2xl font-black num">{inr(o.summary.fare)}</div></div>
-          <div className="text-right"><div className="text-[11px] text-slate-500">To pickup</div><div className="font-mono text-base font-bold text-slate-700 num">{Math.ceil(o.summary.pickup_min)} min · {Number(o.summary.pickup_km).toFixed(1)} km</div></div>
+          <div className="text-right"><div className="text-[11px] text-slate-500">To pickup</div><div className="font-mono text-base font-bold text-slate-700 num">{Math.ceil(o.summary.pickup_min)} min · {Number(o.summary.pickup_km).toFixed(1)} km</div>
+            <div className="mt-1 text-[11px] text-slate-500">Trip <b className="font-mono text-slate-700 num">{tripKm(o.summary.stops).toFixed(1)} km</b></div></div>
         </div>
         {o.summary.women_driver_pref && <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-teal-800"><ShieldCheck className="size-4" aria-hidden />The rider asked for a woman captain</p>}
-        {o.summary.is_pool && <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-sky-800"><Users className="size-4" aria-hidden />Two riders share this trip</p>}
+        {o.summary.is_pool && <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-sky-800"><Users className="size-4" aria-hidden />Shared ride: two riders, fares split. Accept or decline it like any ride.</p>}
         <StopList stops={o.summary.stops} numbered={o.summary.is_pool} />
         {s <= 0 && <p className="mt-2 text-xs text-slate-500">Time is up. The request is passing to the next captain.</p>}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Button variant="outline" size="lg" disabled={busy} onClick={() => onRespond(false)}><X className="size-4 text-slate-500" aria-hidden />Decline</Button>
-          <Button size="lg" disabled={busy} onClick={() => onRespond(true)}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}Accept</Button>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <Button variant="ghost" size="lg" disabled={busy} onClick={() => onRespond('ignore')} title="Skip without declining: goes to the next captain now">Ignore</Button>
+          <Button variant="outline" size="lg" disabled={busy} onClick={() => onRespond('decline')}><X className="size-4 text-slate-500" aria-hidden />Decline</Button>
+          <Button size="lg" disabled={busy} onClick={() => onRespond('accept')}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}Accept</Button>
         </div>
       </div>
     </div>
@@ -469,3 +521,6 @@ function LocationStatus({ online, mode, geoStatus, fix, updatedAt, error, onManu
     </div>
   )
 }
+
+/** Trip length over the stops, straight-line x the road factor (same model as fares). */
+const tripKm = (stops: Stop[]) => stops.slice(1).reduce((sum, st, i) => sum + km(stops[i], st), 0) * ROAD_FACTOR

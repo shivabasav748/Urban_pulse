@@ -23,16 +23,17 @@ import MetricsTab from './MetricsTab'
 import SafetyTab from './SafetyTab'
 
 const ALL = [['j-groups'], ['j-offers'], ['j-events'], ['j-drivers'], ['j-busy'], ['j-metrics'], ['j-zones'], ['j-zone-status'], ['j-audit']]
+// Four main views a judge needs; everything else sits under "More tools". `hint` says in one line what the view shows.
 const TABS = [
-  { id: 'zones', label: 'Zone intelligence', icon: Layers },
-  { id: 'live', label: 'Live fleet', icon: Activity },
-  { id: 'allocation', label: 'Allocation', icon: Compass },
-  { id: 'chaos', label: 'Chaos Mode', icon: FlaskConical },
-  { id: 'forecast', label: 'Forecast & what-if', icon: LineChart },
-  { id: 'pooling', label: 'Pooling', icon: GitMerge },
-  { id: 'safety', label: 'Safety', icon: ShieldAlert },
-  { id: 'metrics', label: 'Metrics', icon: BarChart3 },
-  { id: 'demo', label: 'Demo controls', icon: Sliders },
+  { id: 'zones', label: 'City overview', icon: Layers, main: true, hint: 'Where riders will be in the next 30 minutes, and where captains are short.' },
+  { id: 'live', label: 'Live trips', icon: Activity, main: true, hint: 'Every captain and ride on the map right now.' },
+  { id: 'allocation', label: 'Why this captain?', icon: Compass, main: true, hint: 'For each request: who was considered, their scores, and why the winner won.' },
+  { id: 'safety', label: 'Safety', icon: ShieldAlert, main: true, hint: 'Rider safety reports and how they are reviewed.' },
+  { id: 'chaos', label: 'Chaos Mode', icon: FlaskConical, main: false, hint: 'Break things on purpose (rejects, timeouts, captains going offline) and watch the ride recover.' },
+  { id: 'forecast', label: 'Forecast', icon: LineChart, main: false, hint: 'The demand model: predicted vs actual, and what-if scenarios.' },
+  { id: 'pooling', label: 'Pooling', icon: GitMerge, main: false, hint: 'Combine two nearby requests into one shared trip.' },
+  { id: 'metrics', label: 'Metrics', icon: BarChart3, main: false, hint: 'Completion rate, waiting time and fairness numbers.' },
+  { id: 'demo', label: 'Demo controls', icon: Sliders, main: false, hint: 'Settings for the live demo and a reset button.' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
 type M = { completion_rate: number | null; avg_match_wait_s: number | null; reassignment_success_rate: number | null }
@@ -71,7 +72,7 @@ export default function JudgePage() {
             <span className="rounded-xl border border-teal-200 bg-teal-50 p-2 text-teal-800"><Shield className="size-5" aria-hidden /></span>
             <div>
               <div className="flex items-center gap-2"><h1 className="text-lg font-bold tracking-tight">Judge control room</h1><SimBadge /></div>
-              <p className="text-xs text-slate-500">Zone intelligence, explainable allocation and the live dispatch log</p>
+              <p className="text-xs text-slate-500">Book a ride as Passenger in another tab, then watch it here: where demand is, who gets the ride and why.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -85,18 +86,21 @@ export default function JudgePage() {
         </section>
 
         <div role="tablist" aria-label="Judge console" className="no-scrollbar flex items-center gap-1.5 overflow-x-auto rounded-2xl border bg-white p-1.5 shadow-xs">
-          {TABS.map((t) => {
+          {TABS.map((t, i) => {
             const on = tab === t.id, Icon = t.icon, demo = t.id === 'demo'
-            return (
-              <button key={t.id} role="tab" aria-selected={on} aria-controls={`panel-${t.id}`} id={`tab-${t.id}`} onClick={() => setTab(t.id)}
-                className={cn('flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm',
+            return (<span key={t.id} className="contents">
+              {i > 0 && TABS[i - 1].main && !t.main && <span className="mx-1 shrink-0 border-l pl-2 text-[10px] font-bold tracking-wide text-slate-400 uppercase">More tools</span>}
+              <button role="tab" aria-selected={on} aria-controls={`panel-${t.id}`} id={`tab-${t.id}`} onClick={() => setTab(t.id)}
+                className={cn('flex h-10 shrink-0 items-center gap-1.5 rounded-xl text-xs font-semibold', t.main ? 'px-3.5 sm:text-sm' : 'px-2.5 text-[11px] sm:text-xs',
+                  'outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   on ? (demo ? 'bg-amber-600 text-white shadow-xs' : 'bg-primary text-white shadow-xs') : demo ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}>
                 <Icon className="size-3.5" aria-hidden />{t.label}
-              </button>
+              </button></span>
             )
           })}
         </div>
 
+        <p className="px-1 text-sm text-slate-600">{TABS.find((t) => t.id === tab)?.hint}</p>
         <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
           {tab === 'zones' && <ZoneIntelTab />}
           {tab === 'live' && <LiveTab />}

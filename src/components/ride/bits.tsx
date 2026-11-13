@@ -21,8 +21,8 @@ export function SimBadge({ className, label = 'Simulated' }: { className?: strin
 }
 
 const STATUS_TEXT: Record<RideStatus, string> = {
-  requested: 'Finding a captain', offered: 'Captain notified', accepted: 'Captain assigned',
-  arriving: 'Captain on the way', ongoing: 'On trip', completed: 'Trip completed', cancelled: 'Cancelled',
+  requested: 'Finding your captain', offered: 'Waiting for acceptance', accepted: 'Booking confirmed',
+  arriving: 'Your captain is on the way', ongoing: 'On trip', completed: 'Trip completed', cancelled: 'Cancelled',
   no_driver_found: 'No captain found',
 }
 export const STATUS_SHORT: Record<RideStatus, string> = {
