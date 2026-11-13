@@ -6,7 +6,8 @@ import { MapPinOff, Route } from 'lucide-react'
 import { BLR_CENTER } from '@/lib/places'
 import { cn } from '@/lib/utils'
 
-export type MapDriver = { id: string; lat: number; lng: number; label: string; category: string; busy?: boolean; highlight?: boolean }
+/** approx: privacy-snapped availability marker (a grid cell), not a person's position. n = captains in that cell. */
+export type MapDriver = { id: string; lat: number; lng: number; label: string; category: string; busy?: boolean; highlight?: boolean; approx?: boolean; n?: number }
 export type MapZone = { id: number; name: string; lat: number; lng: number; risk?: 'low' | 'medium' | 'high'; note?: string }
 export type MapPin = { lat: number; lng: number; kind: 'pickup' | 'drop' | 'stop'; label: string; text?: string }
 
@@ -64,7 +65,12 @@ export function MapCanvas({ drivers = [], zones = [], pins = [], route, routeLab
           </Circle>
         ))}
         {route && <Polyline positions={route} pathOptions={{ color: '#0f766e', weight: 4, opacity: 0.9, dashArray: '2 8', lineCap: 'round' }} />}
-        {drivers.map((d) => (
+        {drivers.map((d) => d.approx ? (
+          <CircleMarker key={d.id} center={[d.lat, d.lng]} radius={9 + Math.min(d.n ?? 1, 4) * 2}
+            pathOptions={{ stroke: false, fillColor: CAT_COLOR[d.category] ?? '#0f766e', fillOpacity: 0.28 }}>
+            <Tooltip>About {d.n ?? 1} {d.category}{(d.n ?? 1) > 1 ? 's' : ''} in this area (approximate)</Tooltip>
+          </CircleMarker>
+        ) : (
           <CircleMarker key={d.id} center={[d.lat, d.lng]} radius={d.highlight ? 9 : 6}
             pathOptions={{ color: 'white', weight: 2, fillColor: d.busy ? '#94a3b8' : CAT_COLOR[d.category] ?? '#0f766e', fillOpacity: 1 }}>
             <Tooltip>{d.label} · {d.category}{d.busy ? ' · on a trip' : ''}</Tooltip>

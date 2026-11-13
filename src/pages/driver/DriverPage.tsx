@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Check, Loader2, Navigation, Power, Users, Wallet, X } from 'lucide-react'
+import { Check, Loader2, LocateFixed, MapPinned, Navigation, Power, Users, Wallet, X } from 'lucide-react'
 import { MapCanvas, type MapPin } from '@/components/map/MapCanvas'
 import { MapShell } from '@/components/layout/MapShell'
 import { Brand, CAT_LABEL, Empty, LoadError, SignOutButton, SimBadge, StatusChip } from '@/components/ride/bits'
@@ -12,6 +12,8 @@ import { useAuth } from '@/lib/auth'
 import { useLive, usePhone, useSweep } from '@/lib/hooks'
 import { rpc, supabase, type Ride, type RideStatus } from '@/lib/supabase'
 import { inr } from '@/lib/geo'
+import { GEO_MESSAGE, GOOD_ACCURACY_M, useCurrentPosition, useWatchPosition, type Fix, type GeoStatus } from '@/lib/geolocation'
+import { inDemoArea } from '@/lib/places'
 import { cn } from '@/lib/utils'
 
 type Stop = { ride_id: string; type: 'pickup' | 'drop'; label: string; lat: number; lng: number }
@@ -70,7 +72,7 @@ export default function DriverPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from('driver_profiles').select('*').eq('user_id', uid).single()
       if (error) throw error
-      return data as { online: boolean; lat: number; lng: number; vehicle_category: 'bike' | 'auto' | 'cab'; vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number }
+      return data as { online: boolean; lat: number; lng: number; location_updated_at: string | null; location_source: string; vehicle_category: 'bike' | 'auto' | 'cab'; vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number }
     },
   })
   const offer = useQuery({
@@ -97,6 +99,48 @@ export default function DriverPage() {
 
   const onErr = (e: Error) => { toast.error(e.message); qc.invalidateQueries() }
   const toggle = useMutation({ mutationFn: (v: boolean) => rpc('set_online', { p_online: v }), onSuccess: () => qc.invalidateQueries({ queryKey: ['me', uid] }), onError: onErr })
+
+  // ---- location: requested only when the captain chooses to go online; stops when offline or on sign-out ----
+  const geo = useCurrentPosition()
+  const [locMode, setLocMode] = useState<'gps' | 'manual' | null>(null)
+  const [locError, setLocError] = useState<string | null>(null)
+  const sendLoc = (lat: number, lng: number, accuracy: number | null, source: 'gps' | 'manual') =>
+    rpc('update_location', { p_lat: lat, p_lng: lng, p_accuracy_m: accuracy, p_source: source })
+      .then(() => { setLocError(null); qc.invalidateQueries({ queryKey: ['me', uid] }) })
+      .catch((e: Error) => setLocError(e.message.replace(/^validation: /, '')))
+  const online = !!me.data?.online
+  const watch = useWatchPosition(online && locMode === 'gps', (f) => { void sendLoc(f.lat, f.lng, f.accuracy, 'gps') })
+  const watchLast = useRef<Fix | null>(null)
+  watchLast.current = watch.last
+  // Reloaded while already online: keep the last known position as a manual pin (no surprise permission prompt).
+  useEffect(() => { if (online && locMode === null) setLocMode('manual') }, [online, locMode])
+  useEffect(() => { if (!online) setLocMode(null) }, [online])
+  // Heartbeat: dispatch only uses positions refreshed within the server's freshness window (90 s).
+  useEffect(() => {
+    if (!online || !locMode || !me.data) return
+    const beat = () => {
+      if (locMode === 'manual') { void sendLoc(me.data!.lat, me.data!.lng, null, 'manual'); return }
+      const f = watchLast.current ?? geo.fix // never downgrade a GPS captain to "manual" for lack of a fresh fix
+      if (f) void sendLoc(f.lat, f.lng, f.accuracy, 'gps')
+    }
+    beat()
+    const t = setInterval(beat, 30_000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, locMode])
+
+  const goOnline = async (mode: 'gps' | 'manual') => {
+    if (mode === 'gps') {
+      const f = await geo.request()
+      if (!f) return // panel shows the reason and the manual option
+      if (!inDemoArea(f.lat, f.lng)) { setLocError('You are outside the Bengaluru demo area. Go online with a manual position instead.'); return }
+      await sendLoc(f.lat, f.lng, f.accuracy, 'gps')
+    } else if (me.data) {
+      await sendLoc(me.data.lat, me.data.lng, null, 'manual')
+    }
+    setLocMode(mode)
+    toggle.mutate(true)
+  }
   const respond = useMutation({
     mutationFn: (accept: boolean) => rpc('respond_offer', { p_offer: offer.data!.id, p_accept: accept }),
     onSuccess: (_d, accept) => { if (!accept) toast('Declined. The request went to the next captain.'); qc.invalidateQueries() },
@@ -124,11 +168,16 @@ export default function DriverPage() {
     <Button className="h-14 w-full text-[15px]" disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
       {advance.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Navigation className="size-5" aria-hidden />}{next.label}
     </Button>
-  )) : me.data && (
-    <Button variant={me.data.online ? 'outline' : 'default'} className="h-14 w-full text-[15px]" disabled={toggle.isPending} onClick={() => toggle.mutate(!me.data!.online)}>
-      {toggle.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Power className="size-5" aria-hidden />}{me.data.online ? 'Go offline' : 'Go online'}
+  )) : me.data && (me.data.online ? (
+    <Button variant="outline" className="h-14 w-full text-[15px]" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>
+      {toggle.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Power className="size-5" aria-hidden />}Go offline
     </Button>
-  )
+  ) : (
+    <Button className="h-14 w-full text-[15px]" disabled={toggle.isPending || geo.status === 'locating'} onClick={() => goOnline('gps')}>
+      {toggle.isPending || geo.status === 'locating' ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Power className="size-5" aria-hidden />}
+      {geo.status === 'locating' ? 'Getting your location…' : 'Go online'}
+    </Button>
+  ))
 
   return (
     <>
@@ -141,7 +190,8 @@ export default function DriverPage() {
           </Button>
           <SignOutButton className="size-8 rounded-full" />
         </>}
-        map={<MapCanvas panel drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined} />}>
+        map={<MapCanvas panel drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined}
+          onPick={online && locMode === 'manual' && !g ? (lat, lng) => { if (inDemoArea(lat, lng)) void sendLoc(lat, lng, null, 'manual') } : undefined} />}>
         {me.isLoading ? (
           <div className="space-y-3 pt-1"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-56" /><Skeleton className="h-20 w-full rounded-2xl" /></div>
         ) : me.error ? (
@@ -186,7 +236,7 @@ export default function DriverPage() {
               </span>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">{me.data.online ? "You're online" : "You're offline"}</h1>
-                <p className="text-sm text-muted-foreground">{me.data.online ? 'Ride requests near you appear here.' : 'Go online to start receiving ride requests.'}</p>
+                <p className="text-sm text-muted-foreground">{me.data.online ? 'Ride requests near you appear here.' : 'Going online shares your location so nearby requests reach you, and shows it to your rider during a trip.'}</p>
               </div>
             </div>
             <dl className="grid grid-cols-3 divide-x rounded-2xl bg-muted/60 py-3 text-center">
@@ -194,7 +244,9 @@ export default function DriverPage() {
               <div><dt className="text-xs text-muted-foreground">Acceptance</dt><dd className="text-lg font-semibold tabular-nums">{acc}%</dd></div>
               <div><dt className="text-xs text-muted-foreground">Vehicle</dt><dd className="text-lg font-semibold">{CAT_LABEL[me.data.vehicle_category]}</dd></div>
             </dl>
-            <p className="text-xs text-muted-foreground">{me.data.vehicle_label} · <span className="font-mono">{me.data.plate}</span> · location simulated</p>
+            <p className="text-xs text-muted-foreground">{me.data.vehicle_label} · <span className="font-mono">{me.data.plate}</span></p>
+            <LocationStatus online={me.data.online} mode={locMode} geoStatus={me.data.online ? watch.status : geo.status} fix={watch.last ?? geo.fix}
+              updatedAt={me.data.location_updated_at} error={locError} onManual={() => goOnline('manual')} onRetryGps={() => (me.data!.online ? setLocMode('gps') : goOnline('gps'))} />
           </div>
         )}
       </MapShell>
@@ -227,5 +279,37 @@ export default function DriverPage() {
         </SheetContent>
       </Sheet>
     </>
+  )
+}
+
+/** Where the captain's position comes from, how good it is, and what to do when it fails. */
+function LocationStatus({ online, mode, geoStatus, fix, updatedAt, error, onManual, onRetryGps }: {
+  online: boolean; mode: 'gps' | 'manual' | null; geoStatus: GeoStatus; fix: Fix | null; updatedAt: string | null
+  error: string | null; onManual: () => void; onRetryGps: () => void
+}) {
+  const failed = ['denied', 'unavailable', 'timeout', 'unsupported', 'insecure'].includes(geoStatus)
+  const age = updatedAt ? Math.round((Date.now() - new Date(updatedAt).getTime()) / 1000) : null
+  return (
+    <div className="space-y-2 rounded-2xl bg-muted/60 p-3 text-sm" aria-live="polite">
+      {online && mode === 'gps' && !failed && (
+        <p className="flex items-center gap-2"><LocateFixed className="size-4 text-primary" aria-hidden />
+          {fix ? <>GPS · ±{fix.accuracy} m{age != null && ` · sent ${age}s ago`}</> : 'Waiting for a GPS fix…'}</p>
+      )}
+      {online && mode === 'gps' && fix && fix.accuracy > GOOD_ACCURACY_M && (
+        <p className="text-xs text-warning">Accuracy is above {GOOD_ACCURACY_M} m, so you won't be matched until it improves. Move to open sky, or use a manual position.</p>
+      )}
+      {online && mode === 'manual' && (
+        <p className="flex items-center gap-2"><MapPinned className="size-4 text-muted-foreground" aria-hidden />Manual position · tap the map to move it{age != null && ` · refreshed ${age}s ago`}</p>
+      )}
+      {failed && <p className="text-xs text-muted-foreground">{GEO_MESSAGE[geoStatus]}</p>}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      {(failed || error || (online && mode === 'manual')) && (
+        <div className="flex flex-wrap gap-2">
+          {!(online && mode === 'manual') && <Button size="sm" variant="outline" onClick={onManual}><MapPinned className="size-4" aria-hidden />{online ? 'Use manual position' : 'Go online with a manual position'}</Button>}
+          {geoStatus !== 'unsupported' && geoStatus !== 'insecure' && <Button size="sm" variant="ghost" onClick={onRetryGps}><LocateFixed className="size-4" aria-hidden />Use GPS</Button>}
+        </div>
+      )}
+      {!online && !failed && !error && <p className="text-xs text-muted-foreground">Your position stops being used the moment you go offline.</p>}
+    </div>
   )
 }

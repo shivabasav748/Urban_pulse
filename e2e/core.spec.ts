@@ -24,8 +24,11 @@ async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
 }
 
 async function requestCab(page: Page) {
-  await page.locator('#pickup').selectOption('forum')
-  await page.locator('#drop').selectOption('mgmetro')
+  // new first-run flow: search a pickup landmark, then a destination (no GPS in headless runs)
+  await page.getByPlaceholder('Search a pickup landmark').fill('Forum')
+  await page.getByRole('button', { name: /^Forum Mall/ }).click()
+  await page.getByPlaceholder('Search a destination').fill('MG Road Metro')
+  await page.getByRole('button', { name: /^MG Road Metro/ }).click()
   const cab = page.getByRole('radio', { name: /^Cab/ })
   await expect(cab).toBeVisible()
   await cab.click()

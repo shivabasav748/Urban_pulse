@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string
+// In https dev mode the page talks to Supabase through the Vite proxy (same origin), see vite.config.ts.
+const url = import.meta.env.MODE === 'https' ? `${location.origin}/sb` : (import.meta.env.VITE_SUPABASE_URL as string)
 const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string
 if (!url || !key) throw new Error('Missing VITE_SUPABASE_URL / key: copy .env.example to .env.local')
 

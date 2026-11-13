@@ -30,13 +30,14 @@ const fire = async (calls: (() => Promise<unknown>)[]) => {
   const rs = await Promise.allSettled(calls.map(async (c) => { await sleep(Math.random() * 4); return c() }))
   // errors caught inside sweep_exceptions (incl. deadlocks) never reach the Postgres log: collect them from its result
   for (const r of rs) {
-    const items = r.status === 'fulfilled' ? ((r.value as { errors?: { step: string; error: string }[] } | null)?.errors ?? []) : []
-    for (const it of items) { roundItemErrors.push(`${it.step}: ${it.error}`); if (/deadlock/.test(it.error)) caughtDeadlocks++ }
+    const v = r.status === 'fulfilled' ? (r.value as { errors?: { step: string; error: string }[]; skipped?: boolean } | null) : null
+    if (v?.skipped) { skippedSweeps++; roundSkipped++ }
+    for (const it of v?.errors ?? []) { roundItemErrors.push(`${it.step}: ${it.error}`); if (/deadlock/.test(it.error)) caughtDeadlocks++ }
   }
   return rs
 }
 let roundItemErrors: string[] = []
-let caughtDeadlocks = 0
+let caughtDeadlocks = 0, skippedSweeps = 0, roundSkipped = 0
 const errs = (rs: PromiseSettledResult<unknown>[]) => rs.filter((r): r is PromiseRejectedResult => r.status === 'rejected').map((r) => String(r.reason?.message ?? r.reason))
 
 function setup(online: Session[], extra = '') {
@@ -192,16 +193,37 @@ async function main() {
       return { outcome: st, problems }
     })
 
-    await scenario('4b. five offers expire and four sessions sweep at once', 20, async () => {
+    await scenario('4b. five offers expire and four sessions sweep at once', 50, async () => {
       setup(caps.slice(0, 5))
       for (const r of riders) await request(r)()
       sql(`update ride_offers set expires_at = now() - interval '1 second' where outcome = 'pending';` +
         caps.slice(5, 7).map((c, i) => `update driver_profiles set online = true, lat = ${PICK.lat - 0.002 * (i + 1)}, lng = ${PICK.lng} where user_id = '${c.id}';`).join(''))
+      roundSkipped = 0
       const rs = await fire(riders.slice(0, 4).map((r) => () => r.rpc('sweep_exceptions')))
       const problems = errs(rs).map((m) => `unexpected error: ${m}`)
       const n = one(`select count(*) from ride_events where type = 'offer_no_response'`)
       if (n !== '5') problems.push(`each expired offer must time out exactly once, got ${n} events`)
-      return { outcome: one(`select count(*) filter (where status = 'offered') || ' re-offered, ' || count(*) filter (where status = 'no_driver_found') || ' no driver' from trip_groups`), problems }
+      if (one(`select count(*) from ride_offers where outcome = 'pending' and expires_at < now()`) !== '0') problems.push('an expired offer was left pending (every sweep skipped?)')
+      return { outcome: `${roundSkipped} of 4 sweeps skipped`, problems }
+    })
+
+    await scenario('4c. sweep races the captain accepting / rejecting the same expired offer', 40, async () => {
+      setup([X, Y]); await request(riders[0])()
+      const holder = [X, Y].find((c) => one(`select count(*) from ride_offers where outcome = 'pending' and driver_id = '${c.id}'`) === '1')
+      const o = holder && await pendingOffer(holder)
+      if (!holder || !o) return { outcome: 'fixture', problems: ['fixture: no pending offer'] }
+      sql(`update ride_offers set expires_at = now() - interval '1 second' where id = '${o.id}';`)
+      const accept = Math.random() < 0.5
+      const rs = await fire([() => riders[1].rpc('sweep_exceptions'), () => holder.rpc('respond_offer', { p_offer: o.id, p_accept: accept })])
+      const problems = expectOnly(errs(rs), /conflict|expired/, 'respond/sweep')
+      const first = one(`select outcome from ride_offers where id = '${o.id}'`)
+      const live = Number(one(`select count(*) from ride_offers where group_id = '${o.group_id}' and outcome in ('pending','accepted')`))
+      const offers = Number(one(`select count(*) from ride_offers where group_id = '${o.group_id}'`))
+      if (live !== 1) problems.push(`expected exactly one live offer, got ${live}`)
+      if (first === 'accepted' && offers !== 1) problems.push(`accepted offer but ${offers} offers exist`)
+      if ((first === 'rejected' || first === 'no_response') && offers !== 2) problems.push(`failed offer must be reassigned exactly once, got ${offers - 1} new offers`)
+      if (Number(one(`select count(*) from ride_events where group_id = '${o.group_id}' and type in ('offer_rejected','offer_no_response')`)) > 1) problems.push('offer failed twice')
+      return { outcome: `${accept ? 'accept' : 'reject'} vs sweep → ${first}`, problems }
     })
   } finally {
     // restore demo state first, so a later failure (e.g. reading the log) can never leave the demo dirty
@@ -214,7 +236,7 @@ async function main() {
     try { deadlocks = execSync(`docker logs ${DB} --since ${since} 2>&1`, { maxBuffer: 64 * 1024 * 1024 }).toString().split('\n').filter((l) => /deadlock detected/.test(l)).length }
     catch { deadlocks = 'unknown (container log unreadable)' }
     const rounds = results.reduce((s, r) => s + r.rounds, 0), failed = results.reduce((s, r) => s + r.failed, 0)
-    console.log(`\n${results.filter((r) => !r.failed).length}/${results.length} scenarios passed, ${rounds - failed}/${rounds} rounds, deadlocks: ${deadlocks} uncaught (Postgres log) + ${caughtDeadlocks} caught inside sweep_exceptions, ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+    console.log(`\n${results.filter((r) => !r.failed).length}/${results.length} scenarios passed, ${rounds - failed}/${rounds} rounds, deadlocks: ${deadlocks} uncaught (Postgres log) + ${caughtDeadlocks} caught inside sweep_exceptions, ${skippedSweeps} sweeps skipped by the lock, ${((Date.now() - t0) / 1000).toFixed(0)}s`)
     if (failed || deadlocks || caughtDeadlocks) process.exitCode = 1
   }
 }
