@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { rpc, supabase } from './supabase'
 
@@ -29,4 +29,16 @@ export function useSweep(enabled = true, everyMs = 3000) {
     }, everyMs)
     return () => clearInterval(t)
   }, [enabled, everyMs])
+}
+
+/** True below the md breakpoint (768px). Used to choose bottom sheets on phones, side sheets on desktop. */
+export function usePhone() {
+  const q = '(max-width: 767px)'
+  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(q), on = () => setM(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return m
 }

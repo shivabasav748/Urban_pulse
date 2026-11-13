@@ -92,16 +92,16 @@ export default function PoolingTab() {
                     <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">Vehicles needed</div><b>1</b> vs 2</div>
                     <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">Riders pay</div><b className="tabular-nums">{inr(pooledTotal)}</b> vs {inr(soloTotal)}</div>
                   </div>
-                  <table className="w-full text-sm">
+                  <table className="rtable w-full text-sm">
                     <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">Rider</th><th className="font-medium">Solo</th><th className="font-medium">Pooled</th><th className="font-medium">Added</th><th className="font-medium">Fare</th></tr></thead>
                     <tbody>{plan.perRider!.map((p) => {
                       const r = sel.find((x) => x.id === p.id)!
                       return (
                         <tr key={p.id} className="border-t">
                           <td className="py-1.5">{r.pickup_label} → {r.drop_label}</td>
-                          <td className="tabular-nums">{p.soloMin} min</td><td className="tabular-nums">{p.pooledMin} min</td>
-                          <td className="tabular-nums">+{p.addedMin} min ({p.detourPct}%)</td>
-                          <td className="tabular-nums">{inr(p.pooledFare)} <span className="text-xs text-emerald-700">saves {p.savedPct}%</span></td>
+                          <td data-label="Solo" className="tabular-nums">{p.soloMin} min</td><td data-label="Pooled" className="tabular-nums">{p.pooledMin} min</td>
+                          <td data-label="Added" className="tabular-nums">+{p.addedMin} min ({p.detourPct}%)</td>
+                          <td data-label="Fare" className="tabular-nums">{inr(p.pooledFare)} <span className="text-xs text-success">saves {p.savedPct}%</span></td>
                         </tr>
                       )
                     })}</tbody>

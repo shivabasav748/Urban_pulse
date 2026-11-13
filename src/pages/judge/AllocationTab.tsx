@@ -70,9 +70,9 @@ export default function AllocationTab() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {changed && <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-800">What-if view: re-scored in the browser with your weights/overrides. The stored decision used {JSON.stringify(offer.components.weights)}</Badge>}
+              {changed && <Badge variant="outline" className="h-auto border-info/20 bg-info-soft whitespace-normal text-info">What-if view: re-scored in the browser with your weights/overrides. The stored decision used {JSON.stringify(offer.components.weights)}</Badge>}
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
+                <table className="rtable w-full min-w-[640px] text-sm">
                   <thead><tr className="text-left text-xs text-muted-foreground">
                     <th className="py-1 font-medium">Captain</th>{COMP.map((c) => <th key={c.k} className="font-medium" title={c.dir}>{c.label}</th>)}<th className="text-right font-medium">Score</th>
                   </tr></thead>
@@ -86,14 +86,14 @@ export default function AllocationTab() {
                             <div className="text-xs text-muted-foreground">{Number(raw.pickup_min).toFixed(1)} min · {r.tripsToday} trips · idle {Math.round(r.idleMin)}m</div>
                           </td>
                           {COMP.map((c) => (
-                            <td key={c.k} className="pr-2">
+                            <td key={c.k} data-label={c.label} className="pr-2">
                               <div className="flex items-center gap-1.5">
                                 <div className="h-2 w-16 rounded bg-muted"><div className="h-2 rounded bg-primary" style={{ width: `${r[c.k] * 100}%` }} /></div>
                                 <span className="text-xs tabular-nums">{r[c.k].toFixed(2)}</span>
                               </div>
                             </td>
                           ))}
-                          <td className="text-right font-semibold tabular-nums">{r.score.toFixed(3)}</td>
+                          <td data-label="Score" className="text-right font-semibold tabular-nums">{r.score.toFixed(3)}</td>
                         </tr>
                       )
                     })}

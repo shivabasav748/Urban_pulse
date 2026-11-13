@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider, homeFor, useAuth, type Role } from '@/lib/auth'
 import LoginPage from '@/pages/auth/LoginPage'
+import { OfflineBanner } from '@/components/ride/bits'
 
 const RiderPage = lazy(() => import('@/pages/rider/RiderPage'))
 const DriverPage = lazy(() => import('@/pages/driver/DriverPage'))
@@ -34,6 +35,7 @@ export default function App() {
   return (
     <QueryClientProvider client={qc}>
       <AuthProvider>
+        <OfflineBanner />
         <HashRouter>
           <Routes>
             <Route path="/" element={<Home />} />

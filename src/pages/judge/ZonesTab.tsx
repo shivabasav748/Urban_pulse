@@ -24,7 +24,7 @@ export const SCENARIOS = [
   { id: 'airport_wave', label: 'Airport flight wave, Hebbal (06:00–07:30)', how: 'model feature: incident' },
   { id: 'rush_hour', label: 'Rush hour, office zones (17:30–19:30)', how: 'deterministic ×1.6 adjustment (not a model feature)' },
 ] as const
-const RISK = { low: 'bg-emerald-50 text-emerald-800 border-emerald-200', medium: 'bg-amber-50 text-amber-800 border-amber-200', high: 'bg-red-50 text-red-800 border-red-200' }
+const RISK = { low: 'border-success/20 bg-success-soft text-success', medium: 'border-warning/25 bg-warning-soft text-warning', high: 'border-destructive/20 bg-danger-soft text-destructive' }
 const hhmm = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${h % 1 ? '30' : '00'}`
 
 export default function ZonesTab() {
@@ -56,8 +56,8 @@ export default function ZonesTab() {
             <div className="flex justify-between text-sm"><span>Simulated clock · Thu 12 Nov 2026 (test week)</span><b className="tabular-nums">{hhmm(hour)}</b></div>
             <Slider aria-label="Simulated time of day" min={0} max={23.5} step={0.5} value={[hour]} onValueCommit={([h]) => setClock.mutate(h)} />
           </div>
-          <label className="space-y-1 text-sm">What-if scenario
-            <select className="block h-9 w-[340px] max-w-full rounded-md border bg-background px-2" value={scenario} onChange={(e) => setScenario(e.target.value)}>
+          <label className="w-full space-y-1 text-sm sm:w-auto">What-if scenario
+            <select className="block h-10 w-full rounded-md border bg-background px-2 sm:w-[340px]" value={scenario} onChange={(e) => setScenario(e.target.value)}>
               {SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </label>
@@ -93,7 +93,7 @@ export default function ZonesTab() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {zi.isLoading ? <Skeleton className="h-40" /> : zi.error ? <p className="text-sm text-destructive">{zi.error.message}</p> : (
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="rtable w-full min-w-[760px] text-sm">
               <thead><tr className="text-left text-xs text-muted-foreground">
                 <th className="py-1 font-medium">Zone</th><th className="font-medium">Forecast</th>{scenario !== 'base' && <th className="font-medium">Before event</th>}
                 <th className="font-medium">Actual</th><th className="font-medium">Free captains</th><th className="font-medium">Gap</th><th className="font-medium">Surge raw</th><th className="font-medium">Smoothed</th><th className="font-medium">Risk</th>
@@ -103,14 +103,14 @@ export default function ZonesTab() {
                 return (
                   <tr key={z.zone_id} className="cursor-pointer border-t hover:bg-muted/50" onClick={() => setFocus(z.zone_id)}>
                     <td className="py-1.5 font-medium">{z.name}</td>
-                    <td className="tabular-nums">{Number(z.forecast).toFixed(2)}</td>
-                    {scenario !== 'base' && <td className="tabular-nums text-muted-foreground">{b ? `${Number(b.forecast).toFixed(2)} · ×${Number(b.smoothed).toFixed(2)}` : '…'}</td>}
-                    <td className="tabular-nums">{scenario === 'base' ? z.actual ?? 'N/A' : 'N/A (what-if)'}</td>
-                    <td className="tabular-nums">{z.supply}</td>
-                    <td className={cn('tabular-nums', z.gap > 0 && 'font-medium text-red-700')}>{Number(z.gap).toFixed(2)}</td>
-                    <td className="tabular-nums">×{Number(z.raw).toFixed(3)}</td>
-                    <td className="font-semibold tabular-nums">×{Number(z.smoothed).toFixed(3)}</td>
-                    <td><Badge variant="outline" className={RISK[z.risk]}>{z.risk}</Badge></td>
+                    <td data-label="Forecast" className="tabular-nums">{Number(z.forecast).toFixed(2)}</td>
+                    {scenario !== 'base' && <td data-label="Before event" className="tabular-nums text-muted-foreground">{b ? `${Number(b.forecast).toFixed(2)} · ×${Number(b.smoothed).toFixed(2)}` : '…'}</td>}
+                    <td data-label="Actual" className="tabular-nums">{scenario === 'base' ? z.actual ?? 'N/A' : 'N/A (what-if)'}</td>
+                    <td data-label="Free captains" className="tabular-nums">{z.supply}</td>
+                    <td data-label="Gap" className={cn('tabular-nums', z.gap > 0 && 'font-medium text-destructive')}>{Number(z.gap).toFixed(2)}</td>
+                    <td data-label="Surge raw" className="tabular-nums">×{Number(z.raw).toFixed(3)}</td>
+                    <td data-label="Smoothed" className="font-semibold tabular-nums">×{Number(z.smoothed).toFixed(3)}</td>
+                    <td data-label="Risk"><Badge variant="outline" className={RISK[z.risk]}>{z.risk}</Badge></td>
                   </tr>
                 )
               })}</tbody>

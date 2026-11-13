@@ -69,7 +69,7 @@ test('Pooling: two compatible requests become one trip group with one cab', asyn
 
 test('Dispatch Arena runs both worlds on the same seed with metric verdicts', async ({ page }) => {
   await judge(page)
-  await page.getByRole('link', { name: 'Dispatch Arena' }).click()
+  await page.getByRole('link', { name: 'Arena' }).click()
   await expect(page.getByText('run run-42-base')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Match wait (avg)' })).toBeVisible()
   await page.getByLabel('What-If scenario').selectOption('heavy_rain')

@@ -16,7 +16,7 @@ const resetRides = () => sql(`
   delete from ride_events where true; delete from ride_offers where true; delete from trip_group_members where true;
   delete from trip_groups where true; delete from rides where true;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng from demo_driver_seed s where s.user_id = d.user_id;
-  update settings set fast_demo = true, offer_timeout_s = 15 where id;`)
+  update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 8 where id;`)
 
 async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
   await page.goto('/#/login')
@@ -43,8 +43,8 @@ test('rider books a cab and a simulated captain completes the full lifecycle', a
   await page.screenshot({ path: 'e2e/shots/rider-tracking.png' })
   await expect(page.getByRole('heading', { name: 'Completed' })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText('Estimated total')).toBeVisible()
-  await page.getByRole('tab', { name: /History/ }).click()
-  await expect(page.getByText('Forum Mall → MG Road Metro')).toBeVisible()
+  await page.getByRole('button', { name: 'Ride history' }).click()
+  await expect(page.getByRole('dialog', { name: 'Your rides' }).getByText('from Forum Mall', { exact: false })).toBeVisible()
   const events = sql(`select string_agg(type, ',' order by id) from ride_events`)
   expect(events).toContain('status_completed')
 })
@@ -65,8 +65,8 @@ test('real captain receives, declines -> auto reassignment; next offer accepted 
   await cap.screenshot({ path: 'e2e/shots/captain-offer.png' })
 
   sql(`update driver_profiles set online = true where vehicle_category = 'cab' and is_simulated;`)
-  await offer.getByRole('button', { name: 'Decline' }).click()
-  await expect(rider.getByText(/Reassigned automatically: attempt 2/)).toBeVisible({ timeout: 15_000 })
+  await cap.getByRole('button', { name: 'Decline' }).click()
+  await expect(rider.getByText(/Reassigned automatically \(attempt 2\)/)).toBeVisible({ timeout: 15_000 })
   await rider.screenshot({ path: 'e2e/shots/rider-reassigned.png' })
   await expect(rider.getByRole('heading', { name: 'Completed' })).toBeVisible({ timeout: 60_000 })
   const types = sql(`select string_agg(type, ',' order by id) from ride_events`)
@@ -80,9 +80,9 @@ test('captain accepts and drives the trip through every state', async ({ browser
   await login(cap, 'Captain')
   await login(rider, 'Rider')
   await requestCab(rider)
-  await cap.getByRole('alertdialog').getByRole('button', { name: 'Accept' }).click()
-  await expect(rider.getByRole('heading', { name: 'Driver assigned' })).toBeVisible()
-  for (const [btn, riderHeading] of [['Start driving to pickup', 'Driver on the way'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', 'Completed']]) {
+  await cap.getByRole('button', { name: 'Accept', exact: true }).click()
+  await expect(rider.getByRole('heading', { name: 'Captain assigned' })).toBeVisible()
+  for (const [btn, riderHeading] of [['Start driving to pickup', 'Captain on the way'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', 'Completed']]) {
     await cap.getByRole('button', { name: btn }).click()
     await expect(rider.getByRole('heading', { name: riderHeading })).toBeVisible()
   }

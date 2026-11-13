@@ -98,14 +98,14 @@ export default function ChaosTab() {
                 <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
                   <span className="font-mono text-xs text-muted-foreground">{fmtTime(r.at)}</span>
                   <b>{r.type.replace('_', ' ')}</b><span>excluded {nameOf(r.excluded)}</span>
-                  <span className={cn('ml-auto rounded px-2 py-0.5 text-xs font-medium', r.outcome === 'recovered' ? 'bg-emerald-50 text-emerald-800' : r.outcome === 'pending' ? 'bg-sky-50 text-sky-800' : 'bg-red-50 text-red-800')}>
+                  <span className={cn('ml-auto rounded px-2 py-0.5 text-xs font-medium', r.outcome === 'recovered' ? 'bg-success-soft text-success' : r.outcome === 'pending' ? 'bg-info-soft text-info' : 'bg-danger-soft text-destructive')}>
                     {r.outcome === 'recovered' ? `recovered in ${r.seconds!.toFixed(1)}s` : r.outcome === 'pending' ? 'waiting for next captain…' : 'no driver found'}
                   </span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No exceptions on this ride yet. Inject one above.</p>}
               <ol className="space-y-1 border-t pt-3 font-mono text-xs">
                 {[...(events.data ?? [])].sort((a, b) => a.id - b.id).map((e) => (
-                  <li key={e.id} className={cn(EXC.has(e.type) && 'text-red-700')}>
+                  <li key={e.id} className={cn(EXC.has(e.type) && 'text-destructive')}>
                     {fmtTime(e.at)} {e.type}{e.to_status ? ` → ${e.to_status}` : ''}{e.payload.attempt ? ` (attempt ${e.payload.attempt}${e.payload.driver ? `, ${e.payload.driver}` : ''})` : ''}
                   </li>
                 ))}

@@ -52,9 +52,9 @@ export default function ArenaPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Button asChild variant="ghost" size="sm" className="-ml-2"><Link to="/judge"><ArrowLeft className="size-4" aria-hidden />Judge console</Link></Button>
-            <h1 className="text-xl font-semibold">Nearest driver vs Urban Pulse, same requests</h1>
+            <h1 className="text-lg font-semibold tracking-tight md:text-xl">Nearest driver vs Urban Pulse, same requests</h1>
             <p className="max-w-3xl text-sm text-muted-foreground">
-              Both worlds start from one cloned fleet and replay one immutable request stream, with the same captain responses (accept/decline/timeout rolls per attempt) and trip times. Only the dispatch policy differs, so neither world can touch the other's state.
+              Same cloned fleet, same request stream, same captain responses and trip times. Only the dispatch policy differs; neither world can touch the other's state.
             </p>
           </div>
         </div>
@@ -89,14 +89,14 @@ export default function ArenaPage() {
               <CardDescription>{ARENA_SCENARIOS[scenario].how}. Forecasts for the first 30 min of the run; surge uses the shared formula with the captains in each zone at the start.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="rtable w-full min-w-[640px] text-sm">
                 <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">Zone</th><th className="font-medium">Forecast before → after</th><th className="font-medium">Captains</th><th className="font-medium">Gap</th><th className="font-medium">Surge before → after</th></tr></thead>
                 <tbody>{chain.map((z) => (
-                  <tr key={z.zone} className={cn('border-t', z.forecast > z.base + 0.05 && 'bg-amber-50/60')}>
+                  <tr key={z.zone} className={cn('border-t', z.forecast > z.base + 0.05 && 'bg-warning-soft/60')}>
                     <td className="py-1">{zoneName(z.zone)}</td>
-                    <td className="tabular-nums">{z.base} → <b>{z.forecast}</b></td><td className="tabular-nums">{z.supply}</td>
-                    <td className={cn('tabular-nums', z.gap > 0 && 'text-red-700')}>{z.gap}</td>
-                    <td className="tabular-nums">×{z.surgeBefore.toFixed(2)} → <b>×{z.surgeAfter.toFixed(2)}</b></td>
+                    <td data-label="Forecast" className="tabular-nums">{z.base} → <b>{z.forecast}</b></td><td data-label="Captains" className="tabular-nums">{z.supply}</td>
+                    <td data-label="Gap" className={cn('tabular-nums', z.gap > 0 && 'text-destructive')}>{z.gap}</td>
+                    <td data-label="Surge" className="tabular-nums">×{z.surgeBefore.toFixed(2)} → <b>×{z.surgeAfter.toFixed(2)}</b></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -122,18 +122,18 @@ export default function ArenaPage() {
                 <CardDescription>Urban Pulse better on {wins.filter((v) => v === 'up').length}, nearest better on {wins.filter((v) => v === 'base').length}, tied on {wins.filter((v) => v === 'tie').length} metrics this run. Each verdict is per metric; there is no overall winner.</CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
+                <table className="rtable w-full min-w-[720px] text-sm">
                   <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">Metric</th><th className="font-medium">Nearest</th><th className="font-medium">Urban Pulse</th><th className="font-medium">Better</th><th className="font-medium">Definition</th></tr></thead>
                   <tbody>{METRICS.map((m) => {
                     const a = run.baseline.metrics[m.key], b = run.urbanPulse.metrics[m.key], v = verdict(m.key, a, b)
                     return (
                       <tr key={m.key} className="border-t">
                         <td className="py-1.5 font-medium">{m.label}</td>
-                        <td className="tabular-nums">{fmt(a, m.unit)}</td><td className="tabular-nums">{fmt(b, m.unit)}</td>
-                        <td>{m.key === 'repoKm' ? <span className="text-xs text-muted-foreground">cost of repositioning</span>
-                          : <Badge variant="outline" className={cn(v === 'up' && 'border-emerald-300 bg-emerald-50 text-emerald-800', v === 'base' && 'border-amber-300 bg-amber-50 text-amber-800')}>
+                        <td data-label="Nearest" className="tabular-nums">{fmt(a, m.unit)}</td><td data-label="Urban Pulse" className="tabular-nums">{fmt(b, m.unit)}</td>
+                        <td data-label="Better">{m.key === 'repoKm' ? <span className="text-xs text-muted-foreground">cost of repositioning</span>
+                          : <Badge variant="outline" className={cn(v === 'up' && 'border-success/25 bg-success-soft text-success', v === 'base' && 'border-warning/25 bg-warning-soft text-warning')}>
                             {v === 'up' ? 'Urban Pulse' : v === 'base' ? 'Nearest' : v === 'tie' ? 'Tie' : 'N/A'}</Badge>}</td>
-                        <td className="text-xs text-muted-foreground">{m.def} ({m.better} is better)</td>
+                        <td className="text-xs text-muted-foreground max-md:!block max-md:!text-left">{m.def} ({m.better} is better)</td>
                       </tr>
                     )
                   })}</tbody>
