@@ -1,0 +1,19 @@
+{
+  "model_version": "hgb-v1-seed42",
+  "mae": 1.0204,
+  "baseline_mae": 1.3077,
+  "features": [
+    "zone",
+    "hour",
+    "dow",
+    "weekend",
+    "rain",
+    "incident",
+    "lag1",
+    "lag48",
+    "lag336",
+    "roll4"
+  ],
+  "train_rows": 10752,
+  "test_rows": 2304
+}
