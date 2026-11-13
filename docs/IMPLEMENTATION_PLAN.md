@@ -105,6 +105,7 @@ Geocoding uses about 20 seeded Bengaluru demo places, so there is no Nominatim a
 | Docker / image pulls fail | Hosted Supabase dev project, same migrations |
 | sklearn on Python 3.14 fails | Labelled heuristic (partial requirement) |
 | OSM tiles blocked | Zones and markers on a blank canvas; list view |
+| Google Maps requested | Decided against for the hackathon (docs/MAP_PROVIDER_DECISION.md) |
 | GitHub unreachable | Commit locally, push at breaks |
 | Mentor rejects RPC-as-backend | Thin Node wrapper (approval needed) |
 | Arena overruns | Single scenario, fewer controls |
