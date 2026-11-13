@@ -10,6 +10,7 @@ select id as sim from auth.users where email = 'meera@sim.up' \gset
 
 -- fixture: pickup P = Rani Channamma Circle, Belagavi; only the captain under test is online
 update public.settings set fast_demo = false where id;
+delete from public.safety_report_audit where true; delete from public.safety_reports where true; delete from public.safety_feedback where true;
 delete from public.ride_events where true; delete from public.ride_offers where true; delete from public.trip_group_members where true;
 delete from public.trip_groups where true; delete from public.rides where true;
 update public.driver_profiles set online = false where true;

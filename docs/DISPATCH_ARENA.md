@@ -1,4 +1,6 @@
-# Dispatch Arena: A/B Simulator Design
+# Dispatch Arena: A/B/C Simulator Design
+
+**Update 13 Nov 2026 (arena-v2):** there are now three worlds: A nearest, B existing Urban Pulse (score + greedy 15-min moves), and C zone-aware (score + zone balance, plus a planner that mirrors `_reposition_tick`). There are 13 scenarios, including a railway-station spike, a zone shortage, many rejections, captains going offline and two women-driver-preference cases. New metrics: zone imbalance, reassignment success and delay, moves, unnecessary switches, and preference served, wait and violations. See `src/sim/arena.ts` (METRICS) and docs/FAIRNESS_AND_ALLOCATION.md for results.
 
 Pure, deterministic TypeScript in `src/sim/`. It runs in the browser, never touches Supabase ride tables, and every value is **SIMULATED**.
 

@@ -157,3 +157,10 @@ ml/.venv
 /certs/
 __pycache__/
 *.pyc
+
+# synthetic v3 datasets are regenerated deterministically by ml/generate_v3.py
+/ml/data/
+
+# local design reference folder & Supabase studio scratchpad
+UrbanPulse_jcr/
+/supabase/snippets/

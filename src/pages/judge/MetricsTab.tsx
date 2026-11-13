@@ -6,6 +6,7 @@ import { rpc } from '@/lib/supabase'
 type M = {
   window: string; requested: number; completed: number; cancelled: number; no_driver_found: number; reassignments: number
   completion_rate: number | null; avg_match_wait_s: number | null; avg_pickup_wait_s: number | null; avg_pickup_eta_err_s: number | null
+  reassigned_rides: number; reassignment_success_rate: number | null; avg_reassignment_delay_s: number | null; moves: Record<string, number>; safety_feedback: number; safety_reports_open: number
   drivers: { driver_id: string; name: string; trips_today: number; online: boolean; busy_min_24h: number; acceptance: number }[]
 }
 const na = (v: number | null | undefined, f: (n: number) => string, why: string) => (v == null ? <span title={why}>N/A<span className="block text-xs font-normal text-muted-foreground">{why}</span></span> : f(v))
@@ -23,6 +24,10 @@ export default function MetricsTab() {
     { k: 'Completion rate', v: na(d.completion_rate, (n) => `${Math.round(n * 100)}%`, 'no finished rides'), def: 'completed / (completed + no driver + cancelled after accept)' },
     { k: 'Reassignments', v: d.reassignments, def: 'reject + timeout + captain cancel + delay events' },
     { k: 'Rides', v: `${d.completed}/${d.requested}`, def: `completed / requested · ${d.cancelled} cancelled · ${d.no_driver_found} no driver` },
+    { k: 'Reassignment success', v: na(d.reassignment_success_rate, (n) => `${Math.round(n * 100)}%`, 'no failed offers yet'), def: `rides with a failed offer that later got a captain (${d.reassigned_rides} rides)` },
+    { k: 'Reassignment delay', v: na(d.avg_reassignment_delay_s, (n) => `${n}s`, 'no recoveries yet'), def: 'first failure → next accepted offer' },
+    { k: 'Repositioning (24h)', v: `${d.moves.arrived ?? 0} arrived`, def: Object.entries(d.moves).map(([k, n]) => `${n} ${k}`).join(' · ') || 'no moves yet' },
+    { k: 'Safety', v: `${d.safety_feedback} feedback`, def: `${d.safety_reports_open} report(s) open or under review` },
   ]
   return (
     <div className="space-y-4">

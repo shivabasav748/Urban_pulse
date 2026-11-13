@@ -8,12 +8,13 @@ import { cn } from '@/lib/utils'
 
 /** approx: privacy-snapped availability marker (a grid cell), not a person's position. n = captains in that cell. */
 export type MapDriver = { id: string; lat: number; lng: number; label: string; category: string; busy?: boolean; highlight?: boolean; approx?: boolean; n?: number }
-export type MapZone = { id: number; name: string; lat: number; lng: number; risk?: 'low' | 'medium' | 'high'; note?: string }
+export type MapZone = { id: number; name: string; lat: number; lng: number; risk?: 'low' | 'medium' | 'high'; note?: string; color?: string; strong?: boolean }
 export type MapPin = { lat: number; lng: number; kind: 'pickup' | 'drop' | 'stop'; label: string; text?: string }
 
 const CAT_COLOR: Record<string, string> = { bike: '#b45309', auto: '#6d28d9', cab: '#0f766e' }
+export const ZONE_STATE_COLOR = { undersupplied: '#e11d48', balanced: '#0284c7', oversupplied: '#059669' } as const
 const RISK_COLOR = { low: '#15803d', medium: '#b45309', high: '#b91c1c' }
-const PIN_BG = { pickup: '#0f766e', drop: '#18181b', stop: '#1d4ed8' }
+const PIN_BG = { pickup: '#059669', drop: '#e11d48', stop: '#0369a1' }
 
 const pinIcon = (p: MapPin) => L.divIcon({
   className: '',
@@ -60,7 +61,7 @@ export function MapCanvas({ drivers = [], zones = [], pins = [], route, routeLab
         <ZoomControl position="bottomright" />
         {zones.map((z) => (
           <Circle key={z.id} center={[z.lat, z.lng]} radius={1500}
-            pathOptions={{ color: z.risk ? RISK_COLOR[z.risk] : '#64748b', weight: 1.5, fillOpacity: z.risk === 'high' ? 0.24 : 0.12 }}>
+            pathOptions={{ color: z.color ?? (z.risk ? RISK_COLOR[z.risk] : '#64748b'), weight: z.strong ? 2.5 : 1.5, fillOpacity: z.strong || z.risk === 'high' ? 0.24 : 0.12 }}>
             <Tooltip>{z.name}{z.note ? ` · ${z.note}` : ''}</Tooltip>
           </Circle>
         ))}
@@ -86,7 +87,7 @@ export function MapCanvas({ drivers = [], zones = [], pins = [], route, routeLab
       </MapContainer>
       {(route || tilesDown) && (
         <div className={cn('pointer-events-none absolute z-[500] flex flex-col items-start gap-1.5',
-          panel ? 'top-[calc(env(safe-area-inset-top)+86px)] left-3 md:top-auto md:bottom-4 md:left-[432px]' : 'top-3 left-3')}>
+          panel ? 'top-[calc(env(safe-area-inset-top)+86px)] left-3 md:top-auto md:bottom-4 md:left-[432px]' : 'bottom-2.5 left-2.5')}>
           {route && <MapChip><Route className="size-3.5" aria-hidden />{routeLabel}<span className="hidden xl:inline"> · straight-line, not road</span></MapChip>}
           {tilesDown && <MapChip><MapPinOff className="size-3.5" aria-hidden />Map tiles unavailable · positions still shown</MapChip>}
         </div>
@@ -96,5 +97,5 @@ export function MapCanvas({ drivers = [], zones = [], pins = [], route, routeLab
 }
 
 const MapChip = ({ children }: { children: React.ReactNode }) => (
-  <span className="flex items-center gap-1.5 rounded-full bg-background/95 px-2.5 py-1 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10">{children}</span>
+  <span className="flex items-center gap-1.5 rounded-full border bg-white/95 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm">{children}</span>
 )

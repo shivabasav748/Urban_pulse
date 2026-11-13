@@ -89,7 +89,7 @@ export default function ZonesTab() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Zone supply vs demand at {hhmm(hour)}</CardTitle>
-          <CardDescription className="font-mono text-xs">{zi.data?.formula} · cap {zi.data?.cap} · alpha {zi.data?.alpha}</CardDescription>
+          <CardDescription className="text-xs"><span className="font-mono">{zi.data?.formula} · cap {zi.data?.cap} · alpha {zi.data?.alpha}</span><span className="mt-1 block">Surge columns are a demand-pressure index. Riders are charged surge only when "Charge surge" is on in Demo controls (currently {settings.data?.surge_enabled ? "on, capped at 2×" : "off"}).</span></CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {zi.isLoading ? <Skeleton className="h-40" /> : zi.error ? <p className="text-sm text-destructive">{zi.error.message}</p> : (

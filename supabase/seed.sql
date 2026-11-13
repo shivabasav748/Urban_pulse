@@ -72,3 +72,13 @@ begin
     insert into public.demo_driver_seed values (uid, r.lat, r.lng, r.trips, r.acc, r.idle);
   end loop;
 end $$;
+
+-- SIMULATED demo opt-ins for the women-driver preference (see migration 0007): a fixed, name-independent subset
+-- of simulated captains (every third plate). Real accounts never get a seeded opt-in.
+insert into public.captain_preferences(user_id, women_riders_optin, consented_at, simulated, declaration)
+select dp.user_id, true, now(), true, 'simulated-demo-flag' from public.driver_profiles dp
+where dp.is_simulated and dp.plate in ('KA-SIM-003', 'KA-SIM-006', 'KA-SIM-009', 'KA-SIM-012', 'KA-SIM-015')
+on conflict (user_id) do nothing;
+insert into public.captain_preference_audit(user_id, actor, action)
+select user_id, null, 'seed_simulated' from public.captain_preferences where simulated;
+update public.driver_profiles set op_zone = public._zone_of(lat, lng) where true;

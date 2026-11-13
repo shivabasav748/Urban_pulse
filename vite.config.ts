@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
       https: { key: readFileSync('certs/dev.key'), cert: readFileSync('certs/dev.crt') },
       proxy: { '/sb': { target: 'http://127.0.0.1:54321', changeOrigin: true, ws: true, rewrite: (p: string) => p.replace(/^\/sb/, '') } },
     } : undefined,
-    test: { globals: true, environment: 'node', exclude: ['e2e/**', 'node_modules/**'] },
+    // only our own tests: UrbanPulse_jcr/ is the design reference folder (separate app, own node_modules)
+    test: { globals: true, environment: 'node', include: ['src/**/*.test.ts'] },
   }
 })

@@ -1,63 +1,69 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Check, Loader2, LocateFixed, MapPinned, Navigation, Power, Users, Wallet, X } from 'lucide-react'
-import { MapCanvas, type MapPin } from '@/components/map/MapCanvas'
-import { MapShell } from '@/components/layout/MapShell'
-import { Brand, CAT_LABEL, Empty, LoadError, SignOutButton, SimBadge, StatusChip } from '@/components/ride/bits'
+import { ArrowRight, Car, Check, CheckCircle2, Clock, Compass, Loader2, LocateFixed, MapPin, MapPinned, Navigation, Power, ShieldCheck, TrendingUp, Users, Wallet, X } from 'lucide-react'
+import { MapCanvas, ZONE_STATE_COLOR, type MapPin as Pin } from '@/components/map/MapCanvas'
+import { ActionBar, MapFirstLayout } from '@/components/layout/AppShell'
+import { CAT_LABEL, Empty, Eyebrow, LoadError, Panel, SimBadge, StatusChip, Tag, friendly } from '@/components/ride/bits'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useAuth } from '@/lib/auth'
 import { useLive, usePhone, useSweep } from '@/lib/hooks'
 import { rpc, supabase, type Ride, type RideStatus } from '@/lib/supabase'
 import { inr } from '@/lib/geo'
+import { rideEconomics } from '@/lib/economics'
 import { GEO_MESSAGE, GOOD_ACCURACY_M, useCurrentPosition, useWatchPosition, type Fix, type GeoStatus } from '@/lib/geolocation'
 import { inDemoArea } from '@/lib/places'
+import { safetyLabel, type SafetySummary, type ZoneState } from '@/lib/zones'
 import { cn } from '@/lib/utils'
 
 type Stop = { ride_id: string; type: 'pickup' | 'drop'; label: string; lat: number; lng: number }
-type Offer = { id: string; group_id: string; attempt_no: number; offered_at: string; expires_at: string; score: number; components: { chosen: Record<string, number> }; summary: { pickup_km: number; pickup_min: number; stops: Stop[]; is_pool: boolean; fare: number } }
+type Offer = { id: string; group_id: string; attempt_no: number; offered_at: string; expires_at: string; score: number; components: { chosen: Record<string, number> }
+  summary: { pickup_km: number; pickup_min: number; stops: Stop[]; is_pool: boolean; fare: number; women_driver_pref?: boolean } }
 type Group = { id: string; status: RideStatus; stops: Stop[]; is_pool: boolean }
+type Me = { online: boolean; lat: number; lng: number; location_updated_at: string | null; location_source: string; vehicle_category: 'bike' | 'auto' | 'cab'
+  vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number; idle_since: string | null; is_simulated: boolean }
+type ZoneRow = { zone_id: number; name: string; state: ZoneState; demand_30: number; expected_supply: number; shortage: number; peak: boolean; rising: boolean; km: number; eta_min: number; current: boolean }
+type Move = { id: string; to_zone: number; to_name: string; status: 'recommended' | 'accepted'; source: 'system' | 'captain'; reason: { text?: string }; km: number; eta_min: number; simulated: boolean; expires_at: string }
+type ZoneView = { physical_zone: number; physical_zone_name: string; op_zone: number; op_zone_name: string; location_ok: boolean; online: boolean
+  open_move: Move | null; cooldown_min_left: number; blocked_reason: string | null; zones: ZoneRow[] }
 
 const NEXT: Partial<Record<RideStatus, { to: RideStatus; label: string; title: string }>> = {
   accepted: { to: 'arriving', label: 'Start driving to pickup', title: 'Head to pickup' },
-  arriving: { to: 'ongoing', label: 'Rider picked up · start trip', title: 'Pick up your rider' },
-  ongoing: { to: 'completed', label: 'Complete trip', title: 'On trip' },
+  arriving: { to: 'ongoing', label: 'Rider picked up · start trip', title: 'Arrived at pickup' },
+  ongoing: { to: 'completed', label: 'Complete trip (confirm drop)', title: 'Navigating to drop' },
 }
+const BLOCKED: Record<string, string> = {
+  go_online_first: 'Go online to switch zones.', location_not_fresh: 'Your location needs a fresh fix before switching zones.',
+  on_trip: 'Finish your current trip first.', respond_to_offer: 'Answer the ride request first.', cooldown: 'You changed zone recently.',
+}
+const STATE_TONE = { undersupplied: 'danger', balanced: 'info', oversupplied: 'success' } as const
+const STATE_TEXT = { undersupplied: 'Needs captains', balanced: 'Balanced', oversupplied: 'Plenty of captains' }
 
 /** Depleting bar + seconds left. The bar is decorative; the number is the accessible value. */
-function Countdown({ from, until }: { from: string; until: string }) {
+function useSecondsLeft(from: string, until: string) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(t) }, [])
   const start = new Date(from).getTime(), end = new Date(until).getTime()
-  const left = Math.max(0, end - now), pct = Math.max(0, Math.min(100, (left / Math.max(end - start, 1)) * 100))
-  const s = Math.ceil(left / 1000)
-  return (
-    <div className="space-y-1.5">
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-        <div className={cn('h-full rounded-full', s <= 5 ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pct}%`, transition: 'width 250ms linear' }} />
-      </div>
-      <p className="text-right text-xs text-muted-foreground tabular-nums">{s > 0 ? `Expires in ${s}s` : 'Expired, passing to the next captain'}</p>
-    </div>
-  )
+  const left = Math.max(0, end - now)
+  return { s: Math.ceil(left / 1000), pct: Math.max(0, Math.min(100, (left / Math.max(end - start, 1)) * 100)) }
 }
 
 const StopList = ({ stops, numbered }: { stops: Stop[]; numbered?: boolean }) => (
-  <ol className="relative space-y-3 pl-6 text-sm" aria-label="Stops">
-    <span className="absolute top-2 bottom-2 left-[4px] w-px bg-foreground/20" aria-hidden />
+  <ol className="space-y-3 rounded-2xl border bg-surface p-3 text-sm" aria-label="Stops">
     {stops.map((s, i) => (
-      <li key={i} className="relative">
-        <span className={cn('absolute top-1.5 -left-6 size-2.5', s.type === 'pickup' ? 'rounded-full bg-primary' : 'rounded-[3px] bg-foreground')} aria-hidden />
-        <span className="text-xs text-muted-foreground">{numbered ? `${i + 1}. ` : ''}{s.type === 'pickup' ? 'Pickup' : 'Drop'}</span>
-        <div>{s.label}</div>
+      <li key={i} className="flex items-start gap-2.5">
+        {s.type === 'pickup' ? <MapPin className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden /> : <Navigation className="mt-0.5 size-4 shrink-0 text-rose-600" aria-hidden />}
+        <div className="min-w-0"><div className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">{numbered ? `${i + 1}. ` : ''}{s.type === 'pickup' ? 'Pickup' : 'Destination'}</div><div className="font-semibold">{s.label}</div></div>
       </li>
     ))}
   </ol>
 )
 
 export default function DriverPage() {
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const uid = session!.user.id
   const qc = useQueryClient()
   const phone = usePhone()
@@ -66,39 +72,29 @@ export default function DriverPage() {
   useLive('ride_offers', [['offer', uid]], `driver_id=eq.${uid}`)
   useLive('trip_groups', [['group', uid], ['me', uid]], `driver_id=eq.${uid}`)
   useLive('rides', [['dhistory', uid]], `driver_id=eq.${uid}`)
+  useLive('reposition_moves', [['zone-view', uid]], `driver_id=eq.${uid}`)
 
   const me = useQuery({
     queryKey: ['me', uid],
     queryFn: async () => {
       const { data, error } = await supabase.from('driver_profiles').select('*').eq('user_id', uid).single()
       if (error) throw error
-      return data as { online: boolean; lat: number; lng: number; location_updated_at: string | null; location_source: string; vehicle_category: 'bike' | 'auto' | 'cab'; vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number }
+      return data as Me
     },
   })
-  const offer = useQuery({
-    queryKey: ['offer', uid],
-    queryFn: async () => {
-      const { data } = await supabase.from('ride_offers').select('*').eq('driver_id', uid).eq('outcome', 'pending').maybeSingle()
-      return data as Offer | null
-    },
+  const offer = useQuery({ queryKey: ['offer', uid], queryFn: async () => (await supabase.from('ride_offers').select('*').eq('driver_id', uid).eq('outcome', 'pending').maybeSingle()).data as Offer | null })
+  const group = useQuery({ queryKey: ['group', uid], queryFn: async () => (await supabase.from('trip_groups').select('id, status, stops, is_pool').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing']).maybeSingle()).data as Group | null })
+  const history = useQuery({ queryKey: ['dhistory', uid], queryFn: async () => ((await supabase.from('rides').select('*').eq('driver_id', uid).eq('status', 'completed').order('completed_at', { ascending: false }).limit(20)).data ?? []) as Ride[] })
+  const tripFare = useQuery({
+    queryKey: ['trip-fare', uid, group.data?.id], enabled: !!group.data,
+    queryFn: async () => ((await supabase.from('rides').select('fare').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing'])).data ?? [])
+      .reduce((sum, r) => sum + Number((r as { fare: { total: number } }).fare.total), 0),
   })
-  const group = useQuery({
-    queryKey: ['group', uid],
-    queryFn: async () => {
-      const { data } = await supabase.from('trip_groups').select('id, status, stops, is_pool').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing']).maybeSingle()
-      return data as Group | null
-    },
-  })
-  const history = useQuery({
-    queryKey: ['dhistory', uid],
-    queryFn: async () => {
-      const { data } = await supabase.from('rides').select('*').eq('driver_id', uid).eq('status', 'completed').order('completed_at', { ascending: false }).limit(20)
-      return (data ?? []) as Ride[]
-    },
-  })
+  const zones = useQuery({ queryKey: ['zone-view', uid], queryFn: () => rpc<ZoneView>('captain_zone_view') })
+  const safety = useQuery({ queryKey: ['my-safety', uid], queryFn: () => rpc<SafetySummary>('captain_safety_summary', { p_driver: uid }) })
 
-  const onErr = (e: Error) => { toast.error(e.message); qc.invalidateQueries() }
-  const toggle = useMutation({ mutationFn: (v: boolean) => rpc('set_online', { p_online: v }), onSuccess: () => qc.invalidateQueries({ queryKey: ['me', uid] }), onError: onErr })
+  const onErr = (e: Error) => { toast.error(friendly(e.message)); qc.invalidateQueries() }
+  const toggle = useMutation({ mutationFn: (v: boolean) => rpc('set_online', { p_online: v }), onSuccess: () => qc.invalidateQueries(), onError: onErr })
 
   // ---- location: requested only when the captain chooses to go online; stops when offline or on sign-out ----
   const geo = useCurrentPosition()
@@ -106,13 +102,12 @@ export default function DriverPage() {
   const [locError, setLocError] = useState<string | null>(null)
   const sendLoc = (lat: number, lng: number, accuracy: number | null, source: 'gps' | 'manual') =>
     rpc('update_location', { p_lat: lat, p_lng: lng, p_accuracy_m: accuracy, p_source: source })
-      .then(() => { setLocError(null); qc.invalidateQueries({ queryKey: ['me', uid] }) })
-      .catch((e: Error) => setLocError(e.message.replace(/^validation: /, '')))
+      .then(() => { setLocError(null); qc.invalidateQueries({ queryKey: ['me', uid] }); qc.invalidateQueries({ queryKey: ['zone-view', uid] }) })
+      .catch((e: Error) => setLocError(friendly(e.message)))
   const online = !!me.data?.online
   const watch = useWatchPosition(online && locMode === 'gps', (f) => { void sendLoc(f.lat, f.lng, f.accuracy, 'gps') })
   const watchLast = useRef<Fix | null>(null)
   watchLast.current = watch.last
-  // Reloaded while already online: keep the last known position as a manual pin (no surprise permission prompt).
   useEffect(() => { if (online && locMode === null) setLocMode('manual') }, [online, locMode])
   useEffect(() => { if (!online) setLocMode(null) }, [online])
   // Heartbeat: dispatch only uses positions refreshed within the server's freshness window (90 s).
@@ -132,7 +127,7 @@ export default function DriverPage() {
   const goOnline = async (mode: 'gps' | 'manual') => {
     if (mode === 'gps') {
       const f = await geo.request()
-      if (!f) return // panel shows the reason and the manual option
+      if (!f) return
       if (!inDemoArea(f.lat, f.lng)) { setLocError('You are outside the Belagavi demo area. Go online with a manual position instead.'); return }
       await sendLoc(f.lat, f.lng, f.accuracy, 'gps')
     } else if (me.data) {
@@ -147,130 +142,135 @@ export default function DriverPage() {
     onError: onErr,
   })
   const advance = useMutation({ mutationFn: (to: RideStatus) => rpc('advance_trip', { p_group: group.data!.id, p_to: to }), onSuccess: () => qc.invalidateQueries(), onError: onErr })
-  const cancelTrip = useMutation({ mutationFn: () => rpc('driver_cancel', { p_group: group.data!.id }), onSuccess: () => { toast('Trip released. Reassigning your rider.'); qc.invalidateQueries() }, onError: onErr })
+  const cancelTrip = useMutation({ mutationFn: () => rpc('driver_cancel', { p_group: group.data!.id }), onSuccess: () => { toast('Trip released. Your rider is being reassigned.'); qc.invalidateQueries() }, onError: onErr })
 
   const stops = group.data?.stops ?? offer.data?.summary.stops ?? []
-  const pins: MapPin[] = stops.map((s, i) => ({ lat: s.lat, lng: s.lng, kind: stops.length > 2 ? 'stop' : s.type, label: `${s.type === 'pickup' ? 'Pickup' : 'Drop'}: ${s.label}`, text: stops.length > 2 ? String(i + 1) : undefined }))
+  const pins: Pin[] = stops.map((s, i) => ({ lat: s.lat, lng: s.lng, kind: stops.length > 2 ? 'stop' : s.type, label: `${s.type === 'pickup' ? 'Pickup' : 'Drop'}: ${s.label}`, text: stops.length > 2 ? String(i + 1) : undefined }))
   const meDrv = me.data ? [{ id: uid, lat: me.data.lat, lng: me.data.lng, label: 'You', category: me.data.vehicle_category, highlight: true }] : []
+  const mv = zones.data?.open_move
+  const target = mv ? zones.data?.zones.find((z) => z.zone_id === mv.to_zone) : undefined
   const pts = [...meDrv.map((d) => [d.lat, d.lng] as [number, number]), ...pins.map((p) => [p.lat, p.lng] as [number, number])]
   const acc = me.data ? Math.round(((me.data.offers_accepted + 4) / (me.data.offers_received + 5)) * 100) : 0
   const earned = (history.data ?? []).reduce((s, r) => s + Number(r.fare.total), 0)
+  // SIMULATED estimate: 80% payout, vehicle cost for trip + pickup km (pickup km estimated from the stored pickup ETA)
+  const econ = (history.data ?? []).map((r) => rideEconomics({ category: r.category, fareTotal: Number(r.fare.total), gst: Number(r.fare.gst ?? 0),
+    tripKm: Number(r.est_distance_km), pickupKm: Number(r.est_pickup_min ?? 0) * 25 / 60, tripMin: Number(r.est_trip_min), pickupMin: Number(r.est_pickup_min ?? 0) }))
+  const sumE = (k: 'driverGross' | 'vehicleCost' | 'driverNet') => econ.reduce((s, e) => s + e[k], 0)
   const o = offer.data, g = group.data, next = g ? NEXT[g.status] : undefined
-
-  const footer = me.isLoading || me.error ? undefined : o ? (
-    <div className="flex gap-2">
-      <Button variant="outline" className="h-14 flex-1 text-[15px]" disabled={respond.isPending} onClick={() => respond.mutate(false)}><X className="size-5" aria-hidden />Decline</Button>
-      <Button className="h-14 flex-[2] text-[15px]" disabled={respond.isPending} onClick={() => respond.mutate(true)}>
-        {respond.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Check className="size-5" aria-hidden />}Accept
-      </Button>
-    </div>
-  ) : g ? (next && (
-    <Button className="h-14 w-full text-[15px]" disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
-      {advance.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Navigation className="size-5" aria-hidden />}{next.label}
-    </Button>
-  )) : me.data && (me.data.online ? (
-    <Button variant="outline" className="h-14 w-full text-[15px]" disabled={toggle.isPending} onClick={() => toggle.mutate(false)}>
-      {toggle.isPending ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Power className="size-5" aria-hidden />}Go offline
-    </Button>
-  ) : (
-    <Button className="h-14 w-full text-[15px]" disabled={toggle.isPending || geo.status === 'locating'} onClick={() => goOnline('gps')}>
-      {toggle.isPending || geo.status === 'locating' ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Power className="size-5" aria-hidden />}
-      {geo.status === 'locating' ? 'Getting your location…' : 'Go online'}
-    </Button>
-  ))
+  const idleMin = me.data?.online && me.data.idle_since ? Math.max(0, Math.round((Date.now() - new Date(me.data.idle_since).getTime()) / 60000)) : null
+  const sl = safetyLabel(safety.data)
 
   return (
     <>
-      <MapShell label={o ? 'Incoming ride request' : g ? 'Current trip' : 'Captain status'} footer={footer}
-        topLeft={<><Brand compact /><SimBadge className="hidden sm:inline-flex" /></>}
-        topRight={<>
-          <SimBadge className="mr-1 sm:hidden" />
-          <Button variant="ghost" size="sm" className="h-8 rounded-full" onClick={() => setEarningsOpen(true)} aria-label="Earnings and history">
-            <Wallet className="size-4" aria-hidden /><span className="hidden sm:inline">Earnings</span>
-          </Button>
-          <SignOutButton className="size-8 rounded-full" />
-        </>}
-        map={<MapCanvas panel drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined}
+      <MapFirstLayout
+        mapLabel={online ? <><span className="size-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />{locMode === 'gps' ? 'Live GPS' : 'Manual position'}</> : <>Offline · location not shared</>}
+        map={<MapCanvas drivers={meDrv} pins={pins} route={pins.length >= 2 ? pins.map((p) => [p.lat, p.lng]) : undefined} fit={pts.length ? pts : undefined}
+          zones={target ? [{ id: target.zone_id, name: `Heading to ${target.name}`, lat: zoneCentre(target.zone_id).lat, lng: zoneCentre(target.zone_id).lng, color: ZONE_STATE_COLOR[target.state], strong: true }] : []}
           onPick={online && locMode === 'manual' && !g ? (lat, lng) => { if (inDemoArea(lat, lng)) void sendLoc(lat, lng, null, 'manual') } : undefined} />}>
         {me.isLoading ? (
-          <div className="space-y-3 pt-1"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-56" /><Skeleton className="h-20 w-full rounded-2xl" /></div>
-        ) : me.error ? (
-          <LoadError what="your captain profile" error={me.error} retry={() => me.refetch()} />
-        ) : o ? (
-          <div role="alertdialog" aria-labelledby="offer-title" aria-describedby="offer-summary" className="space-y-4 pt-1">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h1 id="offer-title" className="text-xl font-semibold tracking-tight">New {o.summary.is_pool ? 'pooled ' : ''}ride request</h1>
-                <p id="offer-summary" className="text-sm text-muted-foreground tabular-nums">
-                  {Math.ceil(o.summary.pickup_min)} min · {Number(o.summary.pickup_km).toFixed(1)} km to pickup
-                </p>
+          <Panel><div className="space-y-3" aria-busy="true"><Skeleton className="h-12 w-48" /><Skeleton className="h-20 w-full rounded-2xl" /><Skeleton className="h-14 w-full rounded-2xl" /></div></Panel>
+        ) : me.error || !me.data ? (
+          <Panel><LoadError what="your captain profile" error={me.error} retry={() => me.refetch()} /></Panel>
+        ) : <>
+          <Panel aria-label="Captain status">
+            <div className="flex items-center justify-between gap-3 border-b pb-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-12 shrink-0 place-items-center rounded-xl border border-teal-200 bg-teal-50 text-teal-800"><Car className="size-6" aria-hidden /></span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2"><h1 className="truncate text-base font-bold sm:text-lg">{profile?.display_name ?? 'Captain'}</h1><SimBadge className="max-sm:hidden" /></div>
+                  <p className="truncate font-mono text-xs text-slate-500">{me.data.plate} • <span className="font-semibold text-teal-800 uppercase">{CAT_LABEL[me.data.vehicle_category]}</span></p>
+                </div>
               </div>
-              <div className="text-right"><div className="text-3xl leading-none font-semibold tabular-nums">{inr(o.summary.fare)}</div><div className="mt-1 text-xs text-muted-foreground">est. fare</div></div>
+              {!o && !g && (
+                <button type="button" disabled={toggle.isPending || geo.status === 'locating'} onClick={() => (online ? toggle.mutate(false) : goOnline('gps'))}
+                  aria-pressed={online} aria-label={online ? 'You are online. Go offline' : 'You are offline. Go online'}
+                  className={cn('flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold tracking-wide shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+                    online ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200')}>
+                  {toggle.isPending || geo.status === 'locating' ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Power className="size-3.5" aria-hidden />}
+                  {online ? 'ONLINE' : 'OFFLINE'}
+                </button>
+              )}
             </div>
-            <Countdown from={o.offered_at} until={o.expires_at} />
-            {o.summary.is_pool && <p className="flex items-center gap-1.5 text-sm text-info"><Users className="size-4" aria-hidden />Two riders share this trip</p>}
-            <StopList stops={o.summary.stops} numbered={o.summary.is_pool} />
-            <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-              <span className="font-medium text-foreground">Why you:</span> ranked first on score {o.score} (ETA {o.components.chosen.c_eta}, workload {o.components.chosen.c_workload}, reliability {o.components.chosen.c_reliability}, idle {o.components.chosen.c_idle}). Attempt {o.attempt_no}.
-            </p>
-          </div>
-        ) : g ? (
-          <div className="space-y-4 pt-1">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-xl font-semibold tracking-tight">{next?.title ?? 'Current trip'}</h1>
-              <StatusChip status={g.status} short />
-            </div>
-            <StopList stops={g.stops} numbered={g.is_pool} />
-            {['accepted', 'arriving'].includes(g.status) && (
-              <Button variant="ghost" size="sm" className="-ml-2 text-destructive hover:text-destructive" disabled={cancelTrip.isPending} onClick={() => cancelTrip.mutate()}>
-                Cancel trip · your rider is reassigned
-              </Button>
-            )}
-          </div>
-        ) : me.data && (
-          <div className="space-y-4 pt-1">
-            <div className="flex items-center gap-3">
-              <span className={cn('relative grid size-3 place-items-center')} aria-hidden>
-                {me.data.online && <span className="absolute size-3 rounded-full bg-success/40 motion-safe:animate-ping" />}
-                <span className={cn('size-3 rounded-full', me.data.online ? 'bg-success' : 'bg-muted-foreground/40')} />
-              </span>
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">{me.data.online ? "You're online" : "You're offline"}</h1>
-                <p className="text-sm text-muted-foreground">{me.data.online ? 'Ride requests near you appear here.' : 'Going online shares your location so nearby requests reach you, and shows it to your rider during a trip.'}</p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-2xl border bg-surface p-3">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><MapPin className="size-3 text-teal-700" aria-hidden />Operational zone</div>
+                <div className="mt-1 truncate text-sm font-semibold">{zones.data?.op_zone_name ?? '…'}</div>
+                {zones.data && zones.data.physical_zone !== zones.data.op_zone && <div className="truncate text-[11px] text-slate-500">Now in {zones.data.physical_zone_name}</div>}
+              </div>
+              <div className="rounded-2xl border bg-surface p-3">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><Clock className="size-3 text-amber-600" aria-hidden />Idle time</div>
+                <div className="mt-1 font-mono text-sm font-semibold">{online ? (idleMin == null ? 'On a trip' : `${idleMin} min`) : 'Offline'}</div>
               </div>
             </div>
-            <dl className="grid grid-cols-3 divide-x rounded-2xl bg-muted/60 py-3 text-center">
-              <div><dt className="text-xs text-muted-foreground">Trips today</dt><dd className="text-lg font-semibold tabular-nums">{me.data.trips_today}</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Acceptance</dt><dd className="text-lg font-semibold tabular-nums">{acc}%</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Vehicle</dt><dd className="text-lg font-semibold">{CAT_LABEL[me.data.vehicle_category]}</dd></div>
+
+            <dl className="mt-3 grid grid-cols-3 gap-2 rounded-2xl border bg-surface p-3 text-center">
+              <div><dt className="text-[10px] text-slate-500">Trips today</dt><dd className="mt-0.5 text-sm font-bold num">{me.data.trips_today}</dd></div>
+              <div><dt className="text-[10px] text-slate-500">Acceptance</dt><dd className="mt-0.5 text-sm font-bold text-teal-800 num">{acc}%</dd></div>
+              <div><dt className="text-[10px] text-slate-500">Safety</dt><dd className="mt-0.5 text-sm font-bold num" title={sl.detail}>{safety.data?.published ? `${safety.data.overall?.toFixed(1)}/5` : '—'}</dd></div>
             </dl>
-            <p className="text-xs text-muted-foreground">{me.data.vehicle_label} · <span className="font-mono">{me.data.plate}</span></p>
-            <LocationStatus online={me.data.online} mode={locMode} geoStatus={me.data.online ? watch.status : geo.status} fix={watch.last ?? geo.fix}
-              updatedAt={me.data.location_updated_at} error={locError} onManual={() => goOnline('manual')} onRetryGps={() => (me.data!.online ? setLocMode('gps') : goOnline('gps'))} />
-          </div>
-        )}
-      </MapShell>
+            <p className="mt-1.5 text-[11px] text-slate-500">Safety: {sl.detail}</p>
+
+            {!o && !g && (
+              <div className="mt-3">
+                <LocationStatus online={online} mode={locMode} geoStatus={online ? watch.status : geo.status} fix={watch.last ?? geo.fix}
+                  updatedAt={me.data.location_updated_at} error={locError} onManual={() => goOnline('manual')} onRetryGps={() => (online ? setLocMode('gps') : goOnline('gps'))} />
+              </div>
+            )}
+            <div className="mt-3 flex justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setEarningsOpen(true)}><Wallet className="size-3.5" aria-hidden />Earnings and trips</Button>
+            </div>
+          </Panel>
+
+          {g && (
+            <Panel aria-label="Current trip">
+              <div className="flex items-start justify-between gap-3 border-b pb-4">
+                <div><div className="flex items-center gap-2"><h2 className="text-base font-bold sm:text-lg">{next?.title ?? 'Current trip'}</h2><SimBadge /></div><StatusChip status={g.status} short /></div>
+                {tripFare.data != null && <div className="text-right"><div className="text-[11px] text-slate-500">Fare (est.)</div><div className="font-mono text-lg font-black text-teal-800 num">{inr(tripFare.data)}</div></div>}
+              </div>
+              <div className="mt-4"><StopList stops={g.stops} numbered={g.is_pool} /></div>
+              <ActionBar>
+                {next && (
+                  <Button size="lg" className={cn('w-full', g.status === 'arriving' && 'bg-emerald-700 hover:bg-emerald-800')} disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
+                    {advance.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : g.status === 'ongoing' ? <CheckCircle2 className="size-4" aria-hidden /> : <Navigation className="size-4" aria-hidden />}{next.label}
+                  </Button>
+                )}
+                {['accepted', 'arriving'].includes(g.status) && (
+                  <Button variant="ghost" className="mt-2 w-full text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={cancelTrip.isPending} onClick={() => cancelTrip.mutate()}>
+                    Cancel trip (your rider is reassigned automatically)
+                  </Button>
+                )}
+              </ActionBar>
+            </Panel>
+          )}
+
+          {!g && <ZonePanel view={zones.data} loading={zones.isLoading} error={zones.error} refetch={() => zones.refetch()} online={online} />}
+          {!me.data.is_simulated && <WomenRidersOptIn uid={uid} />}
+        </>}
+      </MapFirstLayout>
+
+      {o && <OfferCard offer={o} busy={respond.isPending} onRespond={(a) => respond.mutate(a)} />}
 
       <Sheet open={earningsOpen} onOpenChange={setEarningsOpen}>
-        <SheetContent side={phone ? 'bottom' : 'right'} className={cn(phone && 'max-h-[85dvh] rounded-t-3xl pb-[env(safe-area-inset-bottom)]')}>
-          <SheetHeader>
-            <SheetTitle>Earnings</SheetTitle>
-            <SheetDescription>Completed trips. Fares are simulated estimates.</SheetDescription>
-          </SheetHeader>
+        <SheetContent side={phone ? 'bottom' : 'right'} className={cn('bg-white', phone && 'max-h-[85dvh] rounded-t-3xl pb-[env(safe-area-inset-bottom)]')}>
+          <SheetHeader><SheetTitle>Earnings</SheetTitle><SheetDescription>Last 20 completed trips. Simulated estimates: 80% payout share, vehicle costs from dated fuel prices and assumptions.</SheetDescription></SheetHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4">
             <dl className="grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-muted/60 p-3"><dt className="text-xs text-muted-foreground">Fares (last 20 trips)</dt><dd className="text-2xl font-semibold tabular-nums">{inr(earned)}</dd></div>
-              <div className="rounded-2xl bg-muted/60 p-3"><dt className="text-xs text-muted-foreground">Trips today</dt><dd className="text-2xl font-semibold tabular-nums">{me.data?.trips_today ?? 0}</dd></div>
+              <div className="rounded-2xl border bg-surface p-3"><dt className="text-xs text-slate-500">Passenger fares</dt><dd className="text-xl font-bold num">{inr(earned)}</dd></div>
+              <div className="rounded-2xl border bg-surface p-3"><dt className="text-xs text-slate-500">Your payout (80%, ex-GST)</dt><dd className="text-xl font-bold num">{inr(sumE('driverGross'))}</dd></div>
+              <div className="rounded-2xl border bg-surface p-3"><dt className="text-xs text-slate-500">Est. fuel and vehicle cost</dt><dd className="text-xl font-bold num">−{inr(sumE('vehicleCost'))}</dd></div>
+              <div className="rounded-2xl border border-teal-200 bg-teal-50 p-3"><dt className="text-xs text-teal-800">Est. net earnings</dt><dd className="text-xl font-bold text-teal-900 num">{inr(sumE('driverNet'))}</dd></div>
             </dl>
+            <p className="text-[11px] leading-snug text-slate-500">Vehicle cost covers paid and empty (pickup) kilometres: energy at Belagavi prices of 13 Nov 2026, maintenance and depreciation assumptions. Trips today: {me.data?.trips_today ?? 0}.</p>
             {history.isLoading ? <Skeleton className="h-24 w-full" /> : !history.data?.length ? <Empty>No completed trips yet.</Empty> : (
               <ul className="divide-y">
                 {history.data.map((r) => (
                   <li key={r.id} className="flex items-center gap-3 py-3 text-sm">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{r.drop_label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">from {r.pickup_label}{r.completed_at && ` · ${new Date(r.completed_at).toLocaleTimeString([], { timeStyle: 'short' })}`}</span>
+                      <span className="block truncate font-semibold">{r.drop_label}</span>
+                      <span className="block truncate text-xs text-slate-500">from {r.pickup_label}{r.completed_at && ` · ${new Date(r.completed_at).toLocaleTimeString([], { timeStyle: 'short' })}`}</span>
                     </span>
-                    <span className="font-semibold tabular-nums">{inr(r.fare.total)}</span>
+                    <span className="font-bold num">{inr(r.fare.total)}</span>
                   </li>
                 ))}
               </ul>
@@ -282,6 +282,161 @@ export default function DriverPage() {
   )
 }
 
+// zone centres for the map overlay (same as the seeded zones table)
+const ZC: Record<number, { lat: number; lng: number }> = {
+  1: { lat: 15.86112, lng: 74.51492 }, 2: { lat: 15.83686, lng: 74.50193 }, 3: { lat: 15.8879, lng: 74.51992 }, 4: { lat: 15.83359, lng: 74.52421 },
+  5: { lat: 15.81746, lng: 74.49263 }, 6: { lat: 15.7773, lng: 74.46486 }, 7: { lat: 15.88564, lng: 74.54633 }, 8: { lat: 15.86308, lng: 74.61119 },
+}
+const zoneCentre = (id: number) => ZC[id] ?? ZC[1]
+
+function OfferCard({ offer: o, busy, onRespond }: { offer: Offer; busy: boolean; onRespond: (accept: boolean) => void }) {
+  const { s, pct } = useSecondsLeft(o.offered_at, o.expires_at)
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[1200] p-3 sm:right-6 sm:bottom-6 sm:left-auto sm:w-[420px] sm:p-0 motion-safe:animate-in motion-safe:slide-in-from-bottom">
+      <div role="alertdialog" aria-labelledby="offer-title" aria-describedby="offer-summary"
+        className="relative overflow-hidden rounded-3xl border-2 border-teal-600 bg-white p-5 pb-[max(env(safe-area-inset-bottom),20px)] shadow-2xl ring-4 ring-teal-600/15">
+        <div className="absolute inset-x-0 top-0 h-1.5 bg-slate-200" aria-hidden>
+          <div className={cn('h-full', s <= 5 ? 'bg-rose-600' : 'bg-teal-600')} style={{ width: `${pct}%`, transition: 'width 250ms linear' }} />
+        </div>
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <div className="flex items-center gap-2"><span id="offer-title" className="text-xs font-bold tracking-wider text-teal-800 uppercase">New {o.summary.is_pool ? 'pooled ' : ''}ride request</span><SimBadge /></div>
+            <div className="mt-0.5 font-mono text-xs text-slate-500">Attempt {o.attempt_no}</div>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-lg border bg-slate-100 px-2.5 py-1" aria-live="off">
+            <Clock className={cn('size-3.5', s <= 5 ? 'text-rose-600 motion-safe:animate-pulse' : 'text-teal-700')} aria-hidden />
+            <span className={cn('font-mono text-sm font-bold num', s <= 5 ? 'text-rose-600' : 'text-slate-800')}>{s > 0 ? `${s}s` : '0s'}</span>
+          </div>
+        </div>
+        <div id="offer-summary" className="my-4 flex items-center justify-between rounded-2xl border bg-surface p-3.5">
+          <div><div className="text-[11px] text-slate-500">Estimated fare</div><div className="font-mono text-2xl font-black num">{inr(o.summary.fare)}</div></div>
+          <div className="text-right"><div className="text-[11px] text-slate-500">To pickup</div><div className="font-mono text-base font-bold text-slate-700 num">{Math.ceil(o.summary.pickup_min)} min · {Number(o.summary.pickup_km).toFixed(1)} km</div></div>
+        </div>
+        {o.summary.women_driver_pref && <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-teal-800"><ShieldCheck className="size-4" aria-hidden />The rider asked for a woman captain</p>}
+        {o.summary.is_pool && <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-sky-800"><Users className="size-4" aria-hidden />Two riders share this trip</p>}
+        <StopList stops={o.summary.stops} numbered={o.summary.is_pool} />
+        {s <= 0 && <p className="mt-2 text-xs text-slate-500">Time is up. The request is passing to the next captain.</p>}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <Button variant="outline" size="lg" disabled={busy} onClick={() => onRespond(false)}><X className="size-4 text-slate-500" aria-hidden />Decline</Button>
+          <Button size="lg" disabled={busy} onClick={() => onRespond(true)}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}Accept</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Zone switching: current zones, the system's suggestion (with its reason), and a captain-chosen move. */
+function ZonePanel({ view, loading, error, refetch, online }: { view?: ZoneView; loading: boolean; error: unknown; refetch: () => void; online: boolean }) {
+  const qc = useQueryClient()
+  const [showAll, setShowAll] = useState(false)
+  const done = () => qc.invalidateQueries({ queryKey: ['zone-view'] })
+  const respond = useMutation({ mutationFn: ({ id, accept }: { id: string; accept: boolean }) => rpc('captain_respond_move', { p_move: id, p_accept: accept }),
+    onSuccess: (_d, v) => { toast(v.accept ? 'Heading there. The zone becomes yours when you arrive.' : 'Suggestion declined.'); done() }, onError: (e) => toast.error(friendly(e.message)) })
+  const request = useMutation({ mutationFn: (zone: number) => rpc('captain_request_zone', { p_zone: zone }),
+    onSuccess: () => { toast('Move started. It becomes operational once your location shows you there.'); done() }, onError: (e) => toast.error(friendly(e.message)) })
+  const cancel = useMutation({ mutationFn: () => rpc('captain_cancel_move'), onSuccess: () => { toast('Move cancelled.'); done() }, onError: (e) => toast.error(friendly(e.message)) })
+  const mv = view?.open_move
+  const others = (view?.zones ?? []).filter((z) => !z.current)
+  const list = showAll ? others : others.filter((z) => z.state === 'undersupplied').slice(0, 3)
+  const blocked = view?.blocked_reason
+  return (
+    <Panel aria-labelledby="zones-title">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2"><Compass className="size-4 text-amber-600" aria-hidden /><h2 id="zones-title" className="text-base font-bold">Where riders need you</h2><SimBadge /></div>
+          <p className="mt-0.5 text-xs text-slate-500">Expected requests in the next 30 minutes vs captains there. Recommendations are optional.</p>
+        </div>
+      </div>
+      {loading ? <Skeleton className="h-28 w-full rounded-2xl" /> : error ? <LoadError what="zone information" error={error} retry={refetch} /> : !view ? null : <>
+        {mv && (
+          <div className={cn('mb-3 rounded-2xl border p-3.5 text-sm', mv.status === 'recommended' ? 'border-amber-200 bg-amber-50' : 'border-teal-200 bg-teal-50')}>
+            <div className="flex items-center gap-1.5 font-bold">
+              {mv.status === 'recommended' ? <><TrendingUp className="size-4 text-amber-700" aria-hidden />Suggested: move to {mv.to_name}</> : <><ArrowRight className="size-4 text-teal-700" aria-hidden />En route to {mv.to_name}</>}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-700">{mv.reason.text}</p>
+            <p className="mt-1 text-xs text-slate-600 num">About {Number(mv.km).toFixed(1)} km · {Math.ceil(mv.eta_min)} min drive{mv.status === 'accepted' && ' · becomes your operational zone when your location shows you there'}</p>
+            <div className="mt-3 flex gap-2">
+              {mv.status === 'recommended' ? <>
+                <Button size="sm" disabled={respond.isPending || !!blocked && blocked !== 'cooldown'} onClick={() => respond.mutate({ id: mv.id, accept: true })}>Head there</Button>
+                <Button size="sm" variant="outline" disabled={respond.isPending} onClick={() => respond.mutate({ id: mv.id, accept: false })}>Not now</Button>
+              </> : <Button size="sm" variant="outline" disabled={cancel.isPending} onClick={() => cancel.mutate()}>Cancel move</Button>}
+            </div>
+          </div>
+        )}
+        {!online && <Empty className="mb-3">Go online to get zone recommendations and switch zones.</Empty>}
+        {online && blocked && !mv && <p className="mb-3 rounded-xl border bg-surface px-3 py-2 text-xs text-slate-600">{BLOCKED[blocked]}{blocked === 'cooldown' && ` Try again in about ${view.cooldown_min_left} min.`}</p>}
+        {list.length === 0 ? (
+          <Empty>{showAll ? 'No other zones.' : 'No zone is short of captains right now. Staying put is the best move.'}</Empty>
+        ) : (
+          <ul className="space-y-2">
+            {list.map((z) => (
+              <li key={z.zone_id} className="flex items-center gap-3 rounded-2xl border bg-surface p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold">{z.name}</span>
+                    <Tag tone={STATE_TONE[z.state]}>{STATE_TEXT[z.state]}</Tag>
+                    {z.peak && <Tag tone="warning">Peak</Tag>}
+                    {z.rising && <Tag tone="warning"><TrendingUp className="size-3" aria-hidden />Rising</Tag>}
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500 num">~{Math.round(z.demand_30)} request{Math.round(z.demand_30) === 1 ? '' : 's'} · {z.expected_supply} captain{z.expected_supply === 1 ? '' : 's'} · {Number(z.km).toFixed(1)} km, {Math.ceil(z.eta_min)} min</p>
+                </div>
+                <Button size="sm" variant="outline" className="shrink-0" disabled={!!blocked || !!mv && mv.status === 'accepted' || z.state === 'oversupplied' || request.isPending}
+                  onClick={() => request.mutate(z.zone_id)} aria-label={`Move to ${z.name}`}>Move here</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show only zones that need captains' : 'Show all zones'}</Button>
+      </>}
+    </Panel>
+  )
+}
+
+/** Self-managed, informed opt-in. Restricted: only this captain, dispatch and admins can read it. */
+function WomenRidersOptIn({ uid }: { uid: string }) {
+  const qc = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const pref = useQuery({ queryKey: ['my-pref', uid], queryFn: async () => (await supabase.from('captain_preferences').select('women_riders_optin, consented_at').eq('user_id', uid).maybeSingle()).data as { women_riders_optin: boolean; consented_at: string | null } | null })
+  const set = useMutation({
+    mutationFn: (v: boolean) => rpc<{ released_offers: number }>('set_women_riders_optin', { p_optin: v }),
+    onSuccess: (r, v) => { setConfirming(false); toast(v ? 'Opted in. You can withdraw at any time.' : r.released_offers ? 'Withdrawn. Your pending request was passed to another captain.' : 'Withdrawn.'); qc.invalidateQueries() },
+    onError: (e) => toast.error(friendly(e.message)),
+  })
+  const on = !!pref.data?.women_riders_optin
+  return (
+    <Panel aria-labelledby="pref-title">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 id="pref-title" className="text-base font-bold">Rides for riders who prefer a woman driver</h2>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+            Riders can ask for a woman driver. If you are a woman captain, you can choose to receive those requests too. Your choice is private: riders and other captains never see it,
+            and it does not change how you are ranked for any other ride.
+          </p>
+          {pref.isLoading ? <Skeleton className="mt-3 h-10 w-40" /> : on ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Tag tone="success"><Check className="size-3.5" aria-hidden />Opted in</Tag>
+              <Button size="sm" variant="outline" disabled={set.isPending} onClick={() => set.mutate(false)}>Withdraw</Button>
+            </div>
+          ) : confirming ? (
+            <div className="mt-3 space-y-2 rounded-2xl border bg-surface p-3 text-xs">
+              <p>I confirm I am a woman captain and want to receive requests from riders who prefer a woman driver. This is self-declared; it is not an identity verification.</p>
+              <div className="flex gap-2">
+                <Button size="sm" disabled={set.isPending} onClick={() => set.mutate(true)}>{set.isPending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}Confirm and opt in</Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <label className="mt-3 flex items-center gap-3 text-sm font-semibold">
+              <Switch checked={false} onCheckedChange={() => setConfirming(true)} aria-label="Receive requests from riders who prefer a woman driver" />Receive these requests
+            </label>
+          )}
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 /** Where the captain's position comes from, how good it is, and what to do when it fails. */
 function LocationStatus({ online, mode, geoStatus, fix, updatedAt, error, onManual, onRetryGps }: {
   online: boolean; mode: 'gps' | 'manual' | null; geoStatus: GeoStatus; fix: Fix | null; updatedAt: string | null
@@ -290,26 +445,27 @@ function LocationStatus({ online, mode, geoStatus, fix, updatedAt, error, onManu
   const failed = ['denied', 'unavailable', 'timeout', 'unsupported', 'insecure'].includes(geoStatus)
   const age = updatedAt ? Math.round((Date.now() - new Date(updatedAt).getTime()) / 1000) : null
   return (
-    <div className="space-y-2 rounded-2xl bg-muted/60 p-3 text-sm" aria-live="polite">
+    <div className="space-y-2 rounded-2xl border bg-surface p-3 text-sm" aria-live="polite">
+      <Eyebrow>Location</Eyebrow>
       {online && mode === 'gps' && !failed && (
-        <p className="flex items-center gap-2"><LocateFixed className="size-4 text-primary" aria-hidden />
+        <p className="flex items-center gap-2"><LocateFixed className="size-4 text-teal-700" aria-hidden />
           {fix ? <>GPS · ±{fix.accuracy} m{age != null && ` · sent ${age}s ago`}</> : 'Waiting for a GPS fix…'}</p>
       )}
       {online && mode === 'gps' && fix && fix.accuracy > GOOD_ACCURACY_M && (
-        <p className="text-xs text-warning">Accuracy is above {GOOD_ACCURACY_M} m, so you won't be matched until it improves. Move to open sky, or use a manual position.</p>
+        <p className="text-xs text-amber-800">Accuracy is above {GOOD_ACCURACY_M} m, so you won't be matched until it improves. Move to open sky, or use a manual position.</p>
       )}
       {online && mode === 'manual' && (
-        <p className="flex items-center gap-2"><MapPinned className="size-4 text-muted-foreground" aria-hidden />Manual position · tap the map to move it{age != null && ` · refreshed ${age}s ago`}</p>
+        <p className="flex items-center gap-2"><MapPinned className="size-4 text-slate-500" aria-hidden />Manual position · tap the map to move it{age != null && ` · refreshed ${age}s ago`}</p>
       )}
-      {failed && <p className="text-xs text-muted-foreground">{GEO_MESSAGE[geoStatus]}</p>}
-      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+      {failed && <p className="text-xs text-slate-600">{GEO_MESSAGE[geoStatus]}</p>}
+      {error && <p role="alert" className="text-xs text-rose-700">{error}</p>}
       {(failed || error || (online && mode === 'manual')) && (
         <div className="flex flex-wrap gap-2">
           {!(online && mode === 'manual') && <Button size="sm" variant="outline" onClick={onManual}><MapPinned className="size-4" aria-hidden />{online ? 'Use manual position' : 'Go online with a manual position'}</Button>}
           {geoStatus !== 'unsupported' && geoStatus !== 'insecure' && <Button size="sm" variant="ghost" onClick={onRetryGps}><LocateFixed className="size-4" aria-hidden />Use GPS</Button>}
         </div>
       )}
-      {!online && !failed && !error && <p className="text-xs text-muted-foreground">Your position stops being used the moment you go offline.</p>}
+      {!online && !failed && !error && <p className="text-xs text-slate-500">Going online shares your location so nearby requests reach you, and shows it to your rider during a trip. It stops the moment you go offline.</p>}
     </div>
   )
 }

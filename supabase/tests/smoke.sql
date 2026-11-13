@@ -1,6 +1,10 @@
 -- Smoke test of the real RPC path. Run: pnpm db:smoke  (wraps everything in a rolled-back transaction)
 \set ON_ERROR_STOP on
 begin;
+-- clean ride tables inside the transaction (rolled back at the end), so leftovers from a live demo or e2e run don't matter
+delete from public.safety_report_audit where true; delete from public.safety_reports where true; delete from public.safety_feedback where true;
+delete from public.ride_events where true; delete from public.ride_offers where true; delete from public.trip_group_members where true;
+delete from public.trip_groups where true; delete from public.rides where true;
 select id as rider from auth.users where email = 'rider@demo.up' \gset
 select id as admin from auth.users where email = 'admin@demo.up' \gset
 

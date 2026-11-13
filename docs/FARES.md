@@ -1,43 +1,35 @@
-# Demo fares: Belagavi (Belgaum)
+# Demo fares: Belagavi (Belgaum), fare model v2
 
-**These prices are made up for the demo.** They follow the shape of Indian city meters (a base fare that includes the first stretch, then per-km and per-minute charges), but they are not any operator's or government's tariff. Every fare in the app is labelled simulated.
+**Every fare in the app is a simulated demo fare.** Model v2 (migration `20261113000009`) replaced the 13 Nov v1 tariff after the reality audit. The reasoning, sources and economics are in [FARE_ECONOMICS_AND_MARKET_BENCHMARK.md](FARE_ECONOMICS_AND_MARKET_BENCHMARK.md).
 
 ## Formula
-`fare = (base + per_km × max(0, distance − included_km) + per_min × trip_minutes) × surge`, rounded to the rupee.
-It is implemented once in SQL (`public._fare`, migration `20261113000005_belagavi.sql`) and mirrored in `src/lib/geo.ts`, and the rider estimate, the captain's offer and the receipt all read the same stored value.
+`pre-tax = round((minimum + per_km × max(0, km − included_km) + night) × surge)`, `total = pre-tax + GST`.
+- **No per-minute journey charge.**
+- **Night:** +10% between 00:00 and 06:00 on the simulated clock, cabs only.
+- **GST:** 5%, cabs only.
+- **Surge:** 1 unless the judge turns it on; then it is capped at 2×.
 
-| Vehicle | Base fare | Included distance | Per km after that | Per minute |
+The formula is implemented in SQL (`public._fare`) and mirrored in `src/lib/geo.ts`. The estimate, the captain's offer and the receipt all read the value stored at booking.
+
+| Vehicle | Minimum fare | Included | Per km after | Basis |
 |---|---|---|---|---|
-| Bike | ₹20 | 1.5 km | ₹6 | ₹0.50 |
-| Auto | ₹30 | 1.5 km | ₹13 | ₹1.00 |
-| Cab | ₹55 | 2.0 km | ₹17 | ₹1.50 |
+| Bike | ₹20 | 1.5 km | ₹6 | Illustrative; **simulated service** (no bike-taxi permits verified in Karnataka) |
+| Auto | ₹30 | 1.5 km | ₹15 | Illustrative (Belagavi auto tariff not verified) |
+| Cab | ₹100 | 4 km | ₹24 | Karnataka app-cab tariff for vehicles up to ₹10 lakh (Feb 2024 state order, as reported), + 5% GST, tolls extra |
 
-**Distance** is an estimate: straight-line distance × 1.35, with no road routing.
-**Trip minutes** come from simulated speeds: 28 km/h off-peak and 20 km/h at peak (8–10 AM and 5–8 PM), with bikes 15% faster.
-**Surge** (simulated) multiplies the total and is capped at ×2.0; it comes from the zone demand forecast and the free captains nearby.
-**Pooling** gives each rider 25% off the cab fare.
+**Distance** is an estimate: straight-line × 1.35, with no road routing. **Pooling** gives each rider 25% off the cab fare.
 
-## Fare chart (before surge): off-peak / peak
-Peak costs a little more only because the time component grows; per-km prices don't change. Bike < auto < cab holds at every distance from 0.3 to 25 km (checked).
+## Fare chart (surge off, daytime)
+| km | 1 | 2 | 3 | 4 | 5 | 8 | 10 | 15 | 20 |
+|---|---|---|---|---|---|---|---|---|---|
+| Bike | 20 | 23 | 29 | 35 | 41 | 59 | 71 | 101 | 131 |
+| Auto | 30 | 38 | 53 | 68 | 83 | 128 | 158 | 233 | 308 |
+| Cab | 105 | 105 | 105 | 105 | 130 | 206 | 256 | 382 | 508 |
 
-| Distance | Bike | Auto | Cab |
-|---|---|---|---|
-| 1 km | ₹21 / ₹21 | ₹32 / ₹33 | ₹58 / ₹59 |
-| 2 km | ₹25 / ₹26 | ₹40 / ₹42 | ₹61 / ₹64 |
-| 3 km | ₹32 / ₹33 | ₹56 / ₹59 | ₹82 / ₹86 |
-| 5 km | ₹46 / ₹47 | ₹87 / ₹91 | ₹122 / ₹128 |
-| 8 km | ₹66 / ₹69 | ₹131 / ₹138 | ₹183 / ₹193 |
-| 12 km | ₹94 / ₹99 | ₹192 / ₹202 | ₹264 / ₹279 |
-| 15 km | ₹115 / ₹121 | ₹238 / ₹251 | ₹324 / ₹344 |
-
-## Example trips (off-peak, before surge)
-Distances use the same estimate as the app. Coordinates are from OpenStreetMap.
-
-| Trip | Est. distance | Bike | Auto | Cab |
+## Example trips
+| Trip | Distance (est.) | Bike | Auto | Cab (night) |
 |---|---|---|---|---|
-| Rani Channamma Circle → Belagavi Railway Station | 2.8 km | ₹31 | ₹52 | ₹77 |
-| Khade Bazar → Tilakwadi | 4.1 km | ₹40 | ₹73 | ₹104 |
-| Central Bus Stand → KLE Hospital, Nehru Nagar | 3.6 km | ₹36 | ₹65 | ₹94 |
-| Tilakwadi → VTU (Machhe) | 10.4 km | ₹84 | ₹168 | ₹231 |
-| Rani Channamma Circle → Belagavi Airport (Sambra) | 14.4 km | ₹110 | ₹228 | ₹311 |
-| Kakati → Belagavi Railway Station | 12.8 km | ₹100 | ₹204 | ₹279 |
+| Rani Channamma Circle → Belagavi Railway Station | 2.76 km | ₹28 | ₹49 | ₹105 (₹116) |
+| Rani Channamma Circle → Belagavi Airport (Sambra) | 14.38 km | ₹97 | ₹223 | ₹366 (₹403) |
+
+Not charged in the demo: waiting time (₹1/min after 5 min under the cab order; captain arrival isn't measured), cancellation fees (Karnataka adoption of the MoRTH rule not found) and tolls.

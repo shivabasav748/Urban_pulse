@@ -12,6 +12,7 @@ test.afterEach(({}, info) => {
   console.log('RIDES', sql(`select string_agg(status || ' a' || attempt_no, ' | ') from rides`))
 })
 test.beforeEach(() => sql(`
+  delete from safety_report_audit where true; delete from safety_reports where true; delete from safety_feedback where true; delete from reposition_moves where true;
   delete from ride_events where true; delete from ride_offers where true; delete from trip_group_members where true;
   delete from trip_groups where true; delete from rides where true;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng from demo_driver_seed s where s.user_id = d.user_id;
@@ -48,7 +49,7 @@ test('Allocation explains the decision and re-ranks when workload changes', asyn
 
 test('Zones: forecast, surge formula, what-if rain changes the forecast', async ({ page }) => {
   await judge(page)
-  await page.getByRole('tab', { name: /Zones/ }).click()
+  await page.getByRole('tab', { name: 'Forecast & what-if' }).click()
   await expect(page.getByText('HistGradientBoostingRegressor')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Khade Bazar / City Centre' })).toBeVisible()
   await page.getByLabel('What-if scenario').selectOption('heavy_rain')
@@ -67,16 +68,31 @@ test('Pooling: two compatible requests become one trip group with one cab', asyn
   await expect.poll(() => sql(`select count(*) from trip_groups where is_pool and status in ('offered','accepted','arriving','ongoing','completed')`), { timeout: 20_000 }).toBe('1')
 })
 
-test('Dispatch Arena runs both worlds on the same seed with metric verdicts', async ({ page }) => {
+test('Dispatch Arena runs three worlds on the same seed with per-metric verdicts', async ({ page }) => {
   await judge(page)
   await page.getByRole('link', { name: 'Arena' }).click()
-  await expect(page.getByText('run run-42-base')).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'Match wait (avg)' })).toBeVisible()
-  await page.getByLabel('What-If scenario').selectOption('heavy_rain')
-  await page.getByRole('button', { name: /Apply scenario/ }).click()
-  await expect(page.getByText(/What-If chain/)).toBeVisible()
+  await expect(page.getByText('run-42-evening_peak')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Passenger wait to match (avg)' })).toBeVisible()
+  for (const w of ['A · Nearest driver', 'B · Urban Pulse (existing)', 'C · Zone-aware (new)']) await expect(page.getByText(w)).toBeVisible()
+  await page.getByLabel('Scenario').selectOption('women_pref_short')
+  await page.getByRole('button', { name: 'Run', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'Preference violations' })).toBeVisible()
+  await page.getByLabel('Scenario').selectOption('heavy_rain')
+  await page.getByRole('button', { name: 'Run', exact: true }).click()
+  await expect(page.getByText(/What-if chain/)).toBeVisible()
   await page.waitForTimeout(4000)
   await page.screenshot({ path: 'e2e/shots/arena-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: 'e2e/shots/arena-mobile.png', fullPage: true })
+})
+
+test('Zone intelligence shows live demand vs supply, peak shortages and the repositioning feed', async ({ page }) => {
+  await judge(page)
+  await expect(page.getByText('Demand vs supply, next 30 minutes')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Nehru Nagar / KLE' })).toBeVisible()
+  await expect(page.getByText('Undersupplied').first()).toBeVisible()
+  await expect(page.getByText('Peak', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Run repositioning now' }).click()
+  await expect(page.getByText(/Repositioning pass/)).toBeVisible()
+  await page.screenshot({ path: 'e2e/shots/judge-zone-intel.png', fullPage: true })
 })

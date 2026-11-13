@@ -19,14 +19,22 @@ describe('geo/fare', () => {
   it('road distance is great-circle x 1.35', () => {
     expect(km({ lat: 12.9352, lng: 77.6245 }, { lat: 12.9733, lng: 77.617 })).toBeCloseTo(5.8, 0)
   })
-  it('fare total = (base + distance + time) x surge', () => {
-    // cab: Rs 55 incl. 2 km + 17 x 8 km + 1.5 x 20 min = 221, x 1.5 surge = 331.5 -> 332
-    expect(fare('cab', 10, 20, 1.5)).toEqual({ base: 55, included_km: 2, per_km: 17, per_min: 1.5, distance: 136, time: 30, surge_mult: 1.5, total: 332 })
+  it('fare model v2: cab = Karnataka band 1 (Rs 100 for 4 km + Rs 24/km) x surge, then 5% GST; no per-minute charge', () => {
+    // cab 10 km: 100 + 24 x 6 = 244; x1.5 surge (only when the operator enables it) = 366; GST 5% = 18.3 -> 18; total 384
+    expect(fare('cab', 10, 20, 1.5)).toEqual({ base: 100, included_km: 4, per_km: 24, per_min: 0, distance: 144, time: 0, night: 0, surge_mult: 1.5,
+      gst: 18, total: 384, tariff: 'karnataka-aggregator-cab-band1-2024' })
+    expect(fare('cab', 10, 999).total).toBe(fare('cab', 10, 0).total) // journey minutes never change the fare
   })
-  it('short trips pay only base + time, and bike < auto < cab at every distance', () => {
-    expect(fare('auto', 1.2, 3).total).toBe(33)
-    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('bike', km, km * 2).total).toBeLessThan(fare('auto', km, km * 2).total)
-    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('auto', km, km * 2).total).toBeLessThan(fare('cab', km, km * 2).total)
+  it('night (00:00-06:00) adds 10% to cab only; surge is capped at 2x', () => {
+    expect(fare('cab', 4, 0, 1, true)).toMatchObject({ night: 10, gst: 6, total: 116 }) // (100 + 10) x 1.05 = 115.5 -> 110 + 6
+    expect(fare('auto', 4, 0, 1, true).night).toBe(0)
+    expect(fare('cab', 10, 0, 5).surge_mult).toBe(2)
+  })
+  it('short trips pay the minimum fare, and bike < auto < cab at every distance', () => {
+    expect(fare('auto', 1.2, 3).total).toBe(30)
+    expect(fare('cab', 3.9).total).toBe(105)
+    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('bike', km).total).toBeLessThan(fare('auto', km).total)
+    for (let km = 0.3; km <= 25; km += 0.1) expect(fare('auto', km).total).toBeLessThan(fare('cab', km).total)
   })
 })
 

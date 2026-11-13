@@ -3,10 +3,13 @@ import { supabase, type RideStatus } from '@/lib/supabase'
 
 export type Stop = { ride_id: string; type: 'pickup' | 'drop'; label: string; lat: number; lng: number }
 export type Group = { id: string; driver_id: string | null; status: RideStatus; is_pool: boolean; category: string; stops: Stop[]; attempt_no: number; created_at: string }
-export type RankRow = { driver_id: string; name: string; pickup_km: number; pickup_min: number; trips_today: number; idle_min: number; c_eta: number; c_workload: number; c_reliability: number; c_idle: number; score: number }
-export type Offer = { id: string; group_id: string; driver_id: string; attempt_no: number; score: number; outcome: string; offered_at: string; responded_at: string | null; components: { chosen: RankRow; ranking: RankRow[]; weights: Record<string, number> } }
+export type RankRow = { driver_id: string; name: string; zone_id?: number; pickup_km: number; pickup_min: number; trips_today: number; idle_min: number; c_eta: number; c_workload: number; c_reliability: number; c_idle: number; c_zone?: number; score: number }
+export type Offer = { id: string; group_id: string; driver_id: string; attempt_no: number; score: number; outcome: string; offered_at: string; responded_at: string | null; components: { chosen: RankRow; policy?: string; weights: Record<string, number> } }
+/** Judge-only: full ranking + why each nearby captain was or was not eligible (migration 0007, table dispatch_audit). */
+export type Audit = { id: number; group_id: string; offer_id: string | null; attempt_no: number; outcome: string; policy: string; ranking: RankRow[]
+  eligibility: { counts?: Record<string, number>; nearest?: { driver_id: string; name: string; km: number; reason: string }[] }; at: string }
 export type Ev = { id: number; group_id: string; ride_id: string; type: string; from_status: string | null; to_status: string | null; payload: Record<string, unknown>; at: string }
-export type Settings = { w_eta: number; w_workload: number; w_reliability: number; w_idle: number; offer_timeout_s: number; fast_demo: boolean; auto_accept_s: number; surge_cap: number; sim_clock: string }
+export type Settings = { w_eta: number; w_workload: number; w_reliability: number; w_idle: number; w_zone: number; surge_enabled: boolean; rank_shortlist: number; reposition_max_move_min: number; dispatch_policy: 'zone_aware' | 'urban_pulse'; offer_timeout_s: number; fast_demo: boolean; auto_accept_s: number; surge_cap: number; sim_clock: string; reposition_cooldown_min: number; peak_ratio: number; safety_min_feedback: number }
 export type Driver = { user_id: string; lat: number; lng: number; online: boolean; vehicle_category: string; is_simulated: boolean; trips_today: number; profiles: { display_name: string } }
 
 const q = async <T,>(p: PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
@@ -30,6 +33,10 @@ export const useEvents = (groupId?: string) => useQuery({
     if (groupId) s = s.eq('group_id', groupId)
     return q<Ev[]>(s)
   },
+})
+export const useAudit = (groupId?: string) => useQuery({
+  queryKey: ['j-audit', groupId], enabled: !!groupId,
+  queryFn: () => q<Audit[]>(supabase.from('dispatch_audit').select('id, group_id, offer_id, attempt_no, outcome, policy, ranking, eligibility, at').eq('group_id', groupId!).order('id')),
 })
 export const useSettings = () => useQuery({ queryKey: ['j-settings'], queryFn: () => q<Settings>(supabase.from('settings').select('*').single()) })
 export const useDrivers = () => useQuery({
