@@ -13,7 +13,8 @@
     "db:smoke": "docker exec -i supabase_db_urban-pulse psql -U postgres -q -v ON_ERROR_STOP=1 -f - < supabase/tests/smoke.sql",
     "db:reset": "pnpm dlx supabase@3.1.0 db reset",
     "db:start": "pnpm dlx supabase@3.1.0 start",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "arena:report": "vite-node scripts/arena-report.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -46,6 +47,7 @@
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
+    "vite-node": "^6.0.0",
     "vitest": "^5.1.0"
   }
 }

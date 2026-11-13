@@ -410,35 +410,45 @@ begin
 end $$;
 
 -- Idempotent; safe for any signed-in client to call on a timer. All clocks are checked server-side.
+-- Each item runs in its own sub-transaction: one failing item (e.g. a race with another client's sweep)
+-- is reported in "errors" and must not block the rest.
 create function public.sweep_exceptions() returns jsonb
 language plpgsql security definer set search_path = '' as $$
-declare s public.settings; o record; g record; n_timeout int := 0; n_delay int := 0; n_auto int := 0;
+declare s public.settings; o record; g record; n_timeout int := 0; n_delay int := 0; n_auto int := 0; errs jsonb := '[]';
 begin
   if auth.uid() is null then raise exception 'forbidden'; end if;
   select * into s from public.settings;
   for o in select id from public.ride_offers where outcome = 'pending' and expires_at < now() loop
-    perform public._fail_offer(o.id, 'no_response'); n_timeout := n_timeout + 1;
+    begin perform public._fail_offer(o.id, 'no_response'); n_timeout := n_timeout + 1;
+    exception when others then errs := errs || jsonb_build_object('step', 'timeout', 'id', o.id, 'error', sqlerrm); end;
   end loop;
   for g in select id from public.trip_groups tg where status = 'arriving'
       and now() - arriving_at > make_interval(mins => 1) * (coalesce((select max(est_pickup_min) from public.rides r
           join public.trip_group_members m on m.ride_id = r.id where m.group_id = tg.id), 5) + s.delay_threshold_min)
       and not (select is_simulated from public.driver_profiles where user_id = tg.driver_id) loop
-    perform public._release(g.id, 'arrival_delayed'); n_delay := n_delay + 1;
+    begin perform public._release(g.id, 'arrival_delayed'); n_delay := n_delay + 1;
+    exception when others then errs := errs || jsonb_build_object('step', 'delay', 'id', g.id, 'error', sqlerrm); end;
   end loop;
   -- fast demo: SIMULATED drivers respond and drive on their own
   if s.fast_demo then
     for o in select ro.id from public.ride_offers ro join public.driver_profiles dp on dp.user_id = ro.driver_id
-             where ro.outcome = 'pending' and dp.is_simulated and now() - ro.offered_at > interval '4 seconds' loop
-      perform public._accept_offer(o.id); n_auto := n_auto + 1;
+             where ro.outcome = 'pending' and dp.is_simulated and now() - ro.offered_at > make_interval(secs => s.auto_accept_s) loop
+      begin perform public._accept_offer(o.id); n_auto := n_auto + 1;
+      exception when others then errs := errs || jsonb_build_object('step', 'auto_accept', 'id', o.id, 'error', sqlerrm); end;
     end loop;
-    for g in select tg.id, tg.status from public.trip_groups tg join public.driver_profiles dp on dp.user_id = tg.driver_id
+    for g in select tg.id from public.trip_groups tg join public.driver_profiles dp on dp.user_id = tg.driver_id
              where dp.is_simulated and tg.status in ('accepted','arriving','ongoing')
                and now() - greatest(tg.accepted_at, coalesce(tg.arriving_at, tg.accepted_at), coalesce(tg.started_at, tg.accepted_at)) > interval '6 seconds' loop
-      perform public._advance(g.id, case g.status when 'accepted' then 'arriving' when 'arriving' then 'ongoing' else 'completed' end);
-      n_auto := n_auto + 1;
+      begin
+        -- re-read status under lock so a concurrent sweep that already advanced it is not an error
+        perform 1 from public.trip_groups where id = g.id for update;
+        perform public._advance(g.id, case (select status from public.trip_groups where id = g.id)
+          when 'accepted' then 'arriving' when 'arriving' then 'ongoing' when 'ongoing' then 'completed' end);
+        n_auto := n_auto + 1;
+      exception when others then errs := errs || jsonb_build_object('step', 'auto_advance', 'id', g.id, 'error', sqlerrm); end;
     end loop;
   end if;
-  return jsonb_build_object('timeouts', n_timeout, 'delays', n_delay, 'auto', n_auto);
+  return jsonb_build_object('timeouts', n_timeout, 'delays', n_delay, 'auto', n_auto, 'errors', errs);
 end $$;
 
 -- ================= judge / admin =================
@@ -485,6 +495,7 @@ begin
     w_reliability = coalesce((p->>'w_reliability')::numeric, w_reliability), w_idle = coalesce((p->>'w_idle')::numeric, w_idle),
     offer_timeout_s = coalesce((p->>'offer_timeout_s')::int, offer_timeout_s),
     fast_demo = coalesce((p->>'fast_demo')::boolean, fast_demo),
+    auto_accept_s = coalesce((p->>'auto_accept_s')::int, auto_accept_s),
     surge_cap = coalesce((p->>'surge_cap')::numeric, surge_cap),
     sim_clock = coalesce((p->>'sim_clock')::timestamptz, sim_clock)
   where id;

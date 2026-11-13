@@ -1,8 +1,17 @@
 import { execSync } from 'node:child_process'
 import { expect, test, type Page } from '@playwright/test'
 
+// surface client-side [sweep] warnings in the test output
+test.beforeEach(({ context }) => { context.on('console', (m) => { if (m.text().includes('[sweep]')) console.log('forwardWarnings', m.text()) }) })
+
 // Test fixtures talk to the local DB directly (local stack only).
 const sql = (q: string) => execSync('docker exec -i supabase_db_urban-pulse psql -U postgres -q -t -A', { input: q }).toString().trim()
+
+test.afterEach(({}, info) => {
+  if (info.status === info.expectedStatus) return
+  console.log('EVENTS', sql(`select string_agg(to_char(at, 'MI:SS.MS') || ' ' || type || coalesce(' a' || (payload->>'attempt'), ''), ' | ' order by id) from ride_events`))
+  console.log('RIDES', sql(`select string_agg(status || ' a' || attempt_no, ' | ') from rides`))
+})
 const resetRides = () => sql(`
   delete from ride_events where true; delete from ride_offers where true; delete from trip_group_members where true;
   delete from trip_groups where true; delete from rides where true;

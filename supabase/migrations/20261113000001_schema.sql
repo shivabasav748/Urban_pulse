@@ -18,6 +18,7 @@ create table public.settings (
   w_idle numeric not null default 0.10,
   offer_timeout_s int not null default 15,
   fast_demo boolean not null default true,
+  auto_accept_s int not null default 8,       -- fast demo: SIMULATED drivers accept after this many seconds
   delay_threshold_min numeric not null default 2,
   search_radius_m int not null default 6000,
   max_attempts int not null default 5,

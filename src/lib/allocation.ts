@@ -2,7 +2,7 @@
 export type Weights = { eta: number; workload: number; reliability: number; idle: number }
 export const DEFAULT_WEIGHTS: Weights = { eta: 0.45, workload: 0.25, reliability: 0.2, idle: 0.1 }
 
-export type Candidate = { id: string; pickupMin: number; tripsToday: number; offersAccepted: number; offersReceived: number; idleMin: number }
+export type Candidate = { id: string; pickupMin: number; tripsToday: number; offersAccepted: number; offersReceived: number; idleMin: number; reliability?: number }
 export type Scored = Candidate & { c_eta: number; c_workload: number; c_reliability: number; c_idle: number; score: number }
 export type Policy = 'nearest' | 'urban_pulse'
 
@@ -19,7 +19,7 @@ export function scoreDrivers(cands: Candidate[], policy: Policy = 'urban_pulse',
   const scored = cands.map((c) => {
     const c_eta = r3(1 - (norm(c.pickupMin, pLo, pHi) ?? 0))
     const c_workload = r3(1 - (norm(c.tripsToday, tLo, tHi) ?? 0))
-    const c_reliability = r3((c.offersAccepted + 4) / (c.offersReceived + 5))
+    const c_reliability = r3(c.reliability ?? (c.offersAccepted + 4) / (c.offersReceived + 5))
     const c_idle = r3(norm(c.idleMin, iLo, iHi) ?? 1)
     const score = policy === 'nearest' ? -c.pickupMin
       : Math.round((w.eta * c_eta + w.workload * c_workload + w.reliability * c_reliability + w.idle * c_idle) * 1e4) / 1e4

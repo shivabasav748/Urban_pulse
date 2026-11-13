@@ -9,8 +9,10 @@ import LoginPage from '@/pages/auth/LoginPage'
 const RiderPage = lazy(() => import('@/pages/rider/RiderPage'))
 const DriverPage = lazy(() => import('@/pages/driver/DriverPage'))
 const JudgePage = lazy(() => import('@/pages/judge/JudgePage'))
+const ArenaPage = lazy(() => import('@/pages/judge/ArenaPage'))
 
-const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 2000, refetchOnWindowFocus: false, retry: 1 } } })
+// Realtime pushes invalidate queries; the 5s poll is a fallback if a push is missed (venue Wi-Fi).
+const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 2000, refetchInterval: 5000, refetchOnWindowFocus: false, retry: 1 } } })
 
 const Spinner = () => <div className="grid h-dvh place-items-center" role="status"><Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading" /></div>
 
@@ -38,7 +40,8 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/rider" element={<RequireRole role="rider"><RiderPage /></RequireRole>} />
             <Route path="/driver" element={<RequireRole role="driver"><DriverPage /></RequireRole>} />
-            <Route path="/judge/*" element={<RequireRole role="admin"><JudgePage /></RequireRole>} />
+            <Route path="/judge" element={<RequireRole role="admin"><JudgePage /></RequireRole>} />
+            <Route path="/judge/arena" element={<RequireRole role="admin"><ArenaPage /></RequireRole>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </HashRouter>

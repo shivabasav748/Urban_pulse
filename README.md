@@ -10,7 +10,20 @@ Intelligent ride matching and dynamic driver allocation (Hack Valley PS 02). Rid
 - **Chaos Mode:** inject rejection, timeout, driver cancel or delay on a live ride and watch the real reassignment RPC recover it.
 
 ## Run locally
-_Setup steps are added with the foundation slice._
+Needs Node 22+, pnpm 10, and Docker Desktop running.
+
+```bash
+pnpm install
+pnpm db:start            # local Supabase (Postgres + PostGIS, Auth, Realtime) in Docker
+pnpm db:reset            # migrations + seed (demo users, drivers, zones, trained forecasts)
+cp .env.example .env.local   # then paste the anon key from: pnpm dlx supabase@3.1.0 status
+pnpm dev                 # http://localhost:5173
+```
+
+Demo accounts (local seed only, password `demo1234`): `rider@demo.up`, `captain1@demo.up`, `admin@demo.up` (judge console + Dispatch Arena). The login page has one-click buttons in dev.
+
+Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, `pnpm db:smoke` (SQL integrity tests), `pnpm e2e` (Playwright, uses local Chrome), `pnpm arena:report [seed]`.
+Retrain the forecast (optional, output is committed): `pip install -r ml/requirements.txt && python ml/train.py`.
 
 ## Docs
 [Scope](docs/PRODUCT_SCOPE.md) · [Data model](docs/DATA_MODEL.md) · [API](docs/API_CONTRACT.md) · [Demo](docs/DEMO_SCRIPT.md) · [Competitor matrix](docs/COMPETITOR_FEATURE_MATRIX.md)

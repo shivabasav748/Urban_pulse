@@ -93,6 +93,9 @@ importers:
       vite:
         specifier: ^8.3.6
         version: 8.3.8(@types/node@24.19.2)(jiti@2.7.0)
+      vite-node:
+        specifier: ^6.0.0
+        version: 6.0.0(@types/node@24.19.2)(jiti@2.7.0)
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(jiti@2.7.0))
@@ -1619,6 +1622,10 @@ packages:
     resolution: {integrity: sha512-DdH81/zPLVS11EUgWq3tEu/xn+EzljlMYooDNdzWEnFha3R3NBMpMV1UqYIpjYHV/SgpFKMIX1Oh7o06SjM/oA==}
     engines: {node: '>=18'}
 
+  cac@7.1.0:
+    resolution: {integrity: sha512-LMDU/U2yA4IPIY8KT0NsNPWEYZvAMkbgyspxJ6btJaYV+WMDOHAZCmB0lsTObiHaRS1V/ztKAl7+TSkTqXyeoA==}
+    engines: {node: '>=20.19.0'}
+
   caniuse-lite@1.0.30001826:
     resolution: {integrity: sha512-wTB+9tIbLro/BCXwLuNV1meHE4L9dS6dArMDwgYfNBPMYScqClHyGunhkCSDtHhe/69Xl0sHlKgBVZ+fNsYtWA==}
 
@@ -2157,6 +2164,10 @@ packages:
     resolution: {integrity: sha512-EFVjAYfzWqWsBMRHPMAXLCDIJnpMhdWAqR7xG6M6a2cs6PMFpl/+Z20w9zDW4vkxOFfddegBKq9Rehd0bxWE7A==}
     engines: {node: '>= 10'}
 
+  obug@2.2.1:
+    resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
+    engines: {node: '>=12.20.0'}
+
   obug@3.0.0:
     resolution: {integrity: sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw==}
     engines: {node: '>=12.20.0'}
@@ -2224,6 +2235,9 @@ packages:
   path-key@4.0.0:
     resolution: {integrity: sha512-haREypq7xkM7ErfgIyA0z+Bj4AGKlMSdlQE2jvJo6huWD1EdkKYV+G/T4nq0YEF2vgTT8kqMFKo1uHn950r4SQ==}
     engines: {node: '>=12'}
+
+  pathe@2.0.3:
+    resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -2576,6 +2590,11 @@ packages:
   validate-npm-package-name@7.0.2:
     resolution: {integrity: sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A==}
     engines: {node: ^20.17.0 || >=22.9.0}
+
+  vite-node@6.0.0:
+    resolution: {integrity: sha512-oj4PVrT+pDh6GYf5wfUXkcZyekYS8kKPfLPXVl8qe324Ec6l4K2DUKNadRbZ3LQl0qGcDz+PyOo7ZAh00Y+JjQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
 
   vite@8.3.8:
     resolution: {integrity: sha512-LzOn3h9rG/0vhLdXrV4yJ4QFA9eEoqCl+Yx+kGJd7aB9w6nfNgVHKSYwLPZUHrz4ZGa+t+kXjV9itvcHDLQouA==}
@@ -4173,6 +4192,8 @@ snapshots:
     dependencies:
       run-applescript: 7.1.0
 
+  cac@7.1.0: {}
+
   caniuse-lite@1.0.30001826: {}
 
   chai@6.3.0: {}
@@ -4578,6 +4599,8 @@ snapshots:
 
   object-treeify@1.1.33: {}
 
+  obug@2.2.1: {}
+
   obug@3.0.0: {}
 
   onetime@5.1.2:
@@ -4656,6 +4679,8 @@ snapshots:
   path-key@3.1.1: {}
 
   path-key@4.0.0: {}
+
+  pathe@2.0.3: {}
 
   picocolors@1.1.1: {}
 
@@ -5054,6 +5079,27 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   validate-npm-package-name@7.0.2: {}
+
+  vite-node@6.0.0(@types/node@24.19.2)(jiti@2.7.0):
+    dependencies:
+      cac: 7.1.0
+      es-module-lexer: 2.3.2
+      obug: 2.2.1
+      pathe: 2.0.3
+      vite: 8.3.8(@types/node@24.19.2)(jiti@2.7.0)
+    transitivePeerDependencies:
+      - '@types/node'
+      - '@vitejs/devtools'
+      - esbuild
+      - jiti
+      - less
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
 
   vite@8.3.8(@types/node@24.19.2)(jiti@2.7.0):
     dependencies:

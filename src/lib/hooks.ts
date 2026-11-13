@@ -22,7 +22,11 @@ export function useLive(table: string, keys: unknown[][], filter?: string) {
 export function useSweep(enabled = true, everyMs = 3000) {
   useEffect(() => {
     if (!enabled) return
-    const t = setInterval(() => { rpc('sweep_exceptions').catch(() => {}) }, everyMs)
+    const t = setInterval(() => {
+      rpc<{ errors?: unknown[] }>('sweep_exceptions')
+        .then((r) => { if (r.errors?.length) console.warn('[sweep] item errors', r.errors) })
+        .catch((e) => console.warn('[sweep] failed', e.message))
+    }, everyMs)
     return () => clearInterval(t)
   }, [enabled, everyMs])
 }

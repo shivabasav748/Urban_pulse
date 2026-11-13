@@ -8,5 +8,5 @@ export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/Urban_pulse/' : '/',
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  test: { globals: true, environment: 'node' },
+  test: { globals: true, environment: 'node', exclude: ['e2e/**', 'node_modules/**'] },
 })
