@@ -155,3 +155,5 @@ ml/.venv
 /playwright-report/
 /e2e/shots/
 /certs/
+__pycache__/
+*.pyc
