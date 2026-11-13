@@ -16,7 +16,7 @@ test.beforeEach(() => sql(`
   delete from trip_groups where true; delete from rides where true; delete from captain_preferences where not simulated;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng, zone_changed_at = null, op_zone = _zone_of(s.home_lat, s.home_lng)
     from demo_driver_seed s where s.user_id = d.user_id;
-  update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 2, dispatch_policy = 'zone_aware', last_reposition_at = null,
+  update settings set fast_demo = true, offer_timeout_s = 15, auto_accept_s = 2, dispatch_policy = 'urban_pulse', last_reposition_at = null,
     sim_clock = '2026-11-12 18:00+05:30' where id;`))
 test.afterAll(() => sql(`update settings set auto_accept_s = 8, offer_timeout_s = 15 where id; delete from reposition_moves where true;
   update driver_profiles d set online = true, lat = s.home_lat, lng = s.home_lng, zone_changed_at = null from demo_driver_seed s where s.user_id = d.user_id;`))
