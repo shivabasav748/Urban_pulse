@@ -22,7 +22,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 START = datetime(2026, 10, 2, tzinfo=IST)
 DAYS, BPD = 42, 48  # days, 30-min buckets per day
 DEMO_DAY = 41       # 0-based index of 12 Nov 2026 (last test day)
-VERSION = "hgb-v1-seed42"
+VERSION = "hgb-v2-seed42"
 
 ZONES = [  # id, name, kind, base demand per 30 min
     (1, "Koramangala", "mixed", 3.0), (2, "Indiranagar", "nightlife", 2.6), (3, "MG Road", "office", 3.2),
@@ -64,18 +64,18 @@ def generate(rng):
             for b in range(BPD):
                 h = b / 2
                 rain = int(zone_rain_day and 15 <= h < 21)
-                incident = 0
+                incident = scheduled = 0  # incident: any demand shock; scheduled_event: only the known-in-advance ones
                 if kind == "events" and concert_day[d] and 22 <= h < 23:
-                    incident = 1
+                    incident = scheduled = 1
                 elif kind == "transit" and flight_wave_day[d] and 6 <= h < 7.5:
-                    incident = 1
+                    incident = scheduled = 1
                 elif kind not in INCIDENT_BOOST and rng.random() < 0.01:
-                    incident = 1  # random local incident (road closure, event)
+                    incident = 1  # random local incident: unpredictable, NOT a model feature
                 wf = weekday_factor if kind != "nightlife" else (1.25 if day.weekday() >= 4 else 1.0)
                 mult = (1 + 0.3 * rain) * (INCIDENT_BOOST.get(kind, 1.6) if incident else 1)
                 lam = base * hour_curve(kind, h) * wf * mult
-                rows.append((zid, d, b, day + timedelta(minutes=30 * b), rain, incident, int(rng.poisson(lam))))
-    return pd.DataFrame(rows, columns=["zone", "day", "bucket", "ts", "rain", "incident", "demand"])
+                rows.append((zid, d, b, day + timedelta(minutes=30 * b), rain, incident, scheduled, int(rng.poisson(lam))))
+    return pd.DataFrame(rows, columns=["zone", "day", "bucket", "ts", "rain", "incident", "scheduled_event", "demand"])
 
 
 def features(df):
@@ -92,22 +92,23 @@ def features(df):
     return df
 
 
-FEATS = ["zone", "hour", "dow", "weekend", "rain", "incident", "lag1", "lag48", "lag336", "roll4"]
+FEATS = ["zone", "hour", "dow", "weekend", "rain", "scheduled_event", "lag1", "lag48", "lag336", "roll4"]
 
 
-def main():
-    rng = np.random.default_rng(SEED)
-    raw = generate(rng)
-    df = features(raw)
+def fit(df):
     train = df[(df.day >= 8) & (df.day <= 35)]
     test = df[df.day >= 36]
-
     model = HistGradientBoostingRegressor(
         loss="poisson", max_iter=300, learning_rate=0.06, max_leaf_nodes=31,
         categorical_features=[FEATS.index("zone")], random_state=SEED,
     )
     model.fit(train[FEATS], train["demand"])
-    pred = np.clip(model.predict(test[FEATS]), 0, None)
+    return train, test, model, np.clip(model.predict(test[FEATS]), 0, None)
+
+
+def main():
+    raw = generate(np.random.default_rng(SEED))
+    train, test, model, pred = fit(features(raw))
     mae = mean_absolute_error(test["demand"], pred)
     base_mae = mean_absolute_error(test["demand"], test["lag336"])
     print(f"train rows {len(train)}, test rows {len(test)}")
@@ -124,8 +125,8 @@ def main():
         return x.assign(scenario=name, predicted=p, actual=np.nan, mv=VERSION)
 
     scen["heavy_rain"] = variant("heavy_rain", lambda x: x.zone.isin([1, 2, 4]) & (x.hour >= 15) & (x.hour < 21), "rain")
-    scen["concert_end"] = variant("concert_end", lambda x: (x.zone == 7) & (x.hour >= 22) & (x.hour < 23), "incident")
-    scen["airport_wave"] = variant("airport_wave", lambda x: (x.zone == 8) & (x.hour >= 6) & (x.hour < 7.5), "incident")
+    scen["concert_end"] = variant("concert_end", lambda x: (x.zone == 7) & (x.hour >= 22) & (x.hour < 23), "scheduled_event")
+    scen["airport_wave"] = variant("airport_wave", lambda x: (x.zone == 8) & (x.hour >= 6) & (x.hour < 7.5), "scheduled_event")
     # rush hour is NOT a model feature: deterministic x1.6 adjustment, labelled in model_version
     rush = test.copy()
     rush_mask = rush.zone.isin(OFFICE) & (rush.hour >= 17.5) & (rush.hour < 19.5)
@@ -162,8 +163,9 @@ def main():
     }
     (ROOT / "src" / "sim").mkdir(parents=True, exist_ok=True)
     (ROOT / "src" / "sim" / "forecast.json").write_text(json.dumps(js), encoding="utf-8")
-    (ROOT / "ml" / "metrics.json").write_text(json.dumps({k: js[k] for k in ("model_version", "mae", "baseline_mae", "features")}
-                                                         | {"train_rows": len(train), "test_rows": len(test)}, indent=2))
+    (ROOT / "ml" / "metrics.json").write_text(json.dumps(
+        {k: js[k] for k in ("model_version", "mae", "baseline_mae", "horizon_min", "features")}
+        | {"improvement_pct": round(100 * (1 - mae / base_mae), 1), "train_rows": len(train), "test_rows": len(test)}, indent=2))
     print(f"wrote {out.relative_to(ROOT)}, src/sim/forecast.json, ml/metrics.json")
 
 
