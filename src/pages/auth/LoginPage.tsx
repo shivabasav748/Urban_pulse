@@ -49,7 +49,7 @@ export default function LoginPage() {
     <main className="flex min-h-dvh justify-center bg-surface px-4 pt-[calc(env(safe-area-inset-top)+40px)] pb-8 sm:items-center sm:pt-8">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex items-center gap-2">
-          <span className="grid size-11 place-items-center rounded-xl bg-primary text-sm font-bold text-primary-foreground" aria-hidden>UP</span>
+          <span className="grid size-11 place-items-center rounded-xl bg-[#fff] shadow-sm ring-1 ring-border" aria-hidden><img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="size-9" width={36} height={36} /></span>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Urban Pulse</h1>
             <p className="text-sm text-muted-foreground">Intelligent ride matching · Belagavi demo</p>

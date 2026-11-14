@@ -110,7 +110,9 @@ export function FareBreakdown({ fare }: { fare: Ride['fare'] }) {
 export function Brand({ compact }: { compact?: boolean }) {
   return (
     <Link to="/" className="flex items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="UrbanPulse home">
-      <span className="grid size-9 place-items-center rounded-lg bg-primary text-base font-black text-white shadow-md shadow-teal-700/20" aria-hidden>UP</span>
+      <span className="grid size-9 place-items-center rounded-lg bg-[#fff] shadow-sm ring-1 ring-border" aria-hidden>
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="size-7" width={28} height={28} />
+      </span>
       <span className={cn('leading-tight', compact && 'max-sm:sr-only')}>
         <span className="block text-lg font-bold tracking-tight">UrbanPulse</span>
         <span className="hidden text-[11px] text-slate-500 lg:block">Smart rides. Smarter city.</span>
