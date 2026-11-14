@@ -39,6 +39,8 @@ cp .env.example .env.local   # then paste the anon key from: pnpm dlx supabase@3
 pnpm dev                 # http://localhost:5173
 ```
 
+Share the local app: `pnpm dev:tunnel` (port 5181, Supabase proxied at /sb), then `cloudflared tunnel --url http://localhost:5181` prints a public https://...trycloudflare.com link. Anyone with it can use the demo accounts and change the local demo database.
+
 Demo accounts (local seed only, password `demo1234`): `rider@demo.up`, `captain1@demo.up`, `admin@demo.up` (judge console + Dispatch Arena). The login page has one-click buttons in dev.
 
 Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, `pnpm db:smoke`, `pnpm db:privacy`, `pnpm db:safety` (SQL integrity, privacy, dispatch and safety tests), `pnpm db:concurrency`, `pnpm e2e` (Playwright, uses local Chrome), `pnpm arena:report [seed]`.
