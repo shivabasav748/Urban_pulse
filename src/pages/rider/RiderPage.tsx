@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowUpDown, Check, ChevronRight, Clock, History, Loader2, LocateFixed, MapPin, Navigation, RefreshCw, Search, ShieldAlert,
+import { ArrowUpDown, Check, CheckCircle2, ChevronRight, Clock, History, Loader2, LocateFixed, MapPin, Navigation, RefreshCw, Search, ShieldAlert,
   ShieldCheck, TrendingUp, Users, X, XCircle } from 'lucide-react'
-import { MapCanvas, type MapDriver, type MapPin as Pin } from '@/components/map/MapCanvas'
+import { MapCanvas, TrafficLegend, type MapDriver, type MapPin as Pin, type MapVehicle } from '@/components/map/MapCanvas'
 import { ActionBar, MapFirstLayout } from '@/components/layout/AppShell'
-import { CAT_ICON, CAT_LABEL, Empty, Eyebrow, FareBreakdown, LoadError, Panel, SimBadge, StatusChip, StatusStepper, Tag, friendly, statusText } from '@/components/ride/bits'
+import { ContactButton } from '@/components/ride/Contact'
+import { WhyCaptain } from '@/components/ride/WhyCaptain'
+import { useTraffic } from '@/lib/traffic'
+import { CAT_ICON, CAT_LABEL, Empty, Eyebrow, FareBreakdown, LoadError, Panel, SimBadge, StatusChip, StatusStepper, friendly, statusText } from '@/components/ride/bits'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
@@ -13,7 +16,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { useAuth } from '@/lib/auth'
 import { useLive, usePhone, useSweep } from '@/lib/hooks'
 import { GEO_MESSAGE, GOOD_ACCURACY_M, STALE_MS, useCurrentPosition } from '@/lib/geolocation'
-import { PLACES, inDemoArea, pointPlace, searchPlaces, type Place } from '@/lib/places'
+import { DEMO_HOME_ID, PLACES, inDemoArea, pointPlace, searchPlaces, type Place } from '@/lib/places'
 import { rpc, supabase, type Ride } from '@/lib/supabase'
 import { inr } from '@/lib/geo'
 import { safetyLabel, type SafetySummary } from '@/lib/zones'
@@ -35,21 +38,25 @@ const RADII = [2000, 3000, 5000] as const
 const km = (m: number) => `${m / 1000} km`
 const approxMarkers = (ms: Marker[] = []): MapDriver[] =>
   ms.map((m, i) => ({ id: `a${i}`, lat: m.lat, lng: m.lng, label: 'Captains nearby', category: m.category, approx: true, n: m.n }))
-const QUICK = [['railway-station', 'Railway Station'], ['tilakwadi', 'Tilakwadi'], ['airport', 'Airport'], ['vtu', 'VTU'], ['udyambag', 'Udyambag']] as const
+const QUICK = [['jcer', 'JCER Machhe'], ['railway-station', 'Railway Station'], ['tilakwadi', 'Tilakwadi'], ['airport', 'Airport'], ['vtu', 'VTU'], ['udyambag', 'Udyambag']] as const
 const placeById = (id: string) => PLACES.find((p) => p.id === id)!
 const FAIL = ['offer_rejected', 'offer_no_response', 'offer_cancelled', 'driver_cancelled', 'arrival_delayed', 'captain_unreachable']
 const PREF_KEY = 'up.preferWoman'
+const pickupLabel = (p: Place) => p.name === 'Current location' || p.name === 'Pinned location' ? `${p.name} (${p.area})` : p.name
 const readPref = () => { try { return sessionStorage.getItem(PREF_KEY) === '1' } catch { return false } }
 
 /** What the passenger needs to know, from the ride's own event log. Never internals or errors. */
+// "Booking confirmed" only ever comes from ride.status = accepted, i.e. after the acceptance is persisted.
 function riderMessage(ride: RideX, events: Ev[], waiting: boolean) {
   const last = events[0]
-  if (ride.status === 'no_driver_found') return { title: 'No suitable captains available right now', tone: 'danger' as const }
-  if (waiting) return { title: ride.women_driver_pref ? 'Still looking for a woman captain' : 'Still looking for a captain', tone: 'info' as const }
-  if (ride.status === 'offered') return { title: ride.attempt_no > 1 ? 'Another captain notified' : 'Captain notified', tone: 'info' as const }
-  if (ride.status === 'requested') return { title: last && FAIL.includes(last.type) ? 'Captain unavailable · finding another captain' : 'Finding a captain', tone: 'info' as const }
-  if (ride.status === 'accepted' && ride.attempt_no > 1) return { title: 'New captain assigned', tone: 'brand' as const }
-  return { title: statusText(ride.status), tone: 'brand' as const }
+  if (ride.status === 'no_driver_found') return { title: 'No captain found', detail: ride.women_driver_pref
+    ? 'No woman captain is free near your pickup right now. You decide what happens next.'
+    : `No eligible captain is currently available for your selected vehicle (${CAT_LABEL[ride.category]}).` }
+  if (waiting) return { title: ride.women_driver_pref ? 'Still looking for a woman captain' : 'Still looking for a captain', detail: 'We retry automatically for a few minutes. You can change your mind below.' }
+  if (ride.status === 'offered') return { title: 'Waiting for acceptance', detail: 'The best available captain has been notified. Waiting for acceptance.' }
+  if (ride.status === 'requested' && last && FAIL.includes(last.type)) return { title: 'Finding another captain', detail: 'Your previous captain became unavailable. Finding another captain.' }
+  if (ride.status === 'requested') return { title: 'Finding your captain', detail: `Matching you with the best ${CAT_LABEL[ride.category]} captain nearby.` }
+  return { title: statusText(ride.status), detail: '' }
 }
 
 /** Search over demo landmarks + the rider's own recent places. */
@@ -97,12 +104,13 @@ export default function RiderPage() {
   const qc = useQueryClient()
   const phone = usePhone()
   const geo = useCurrentPosition()
-  const [pickup, setPickupRaw] = useState<Place>()
+  const [pickup, setPickupRaw] = useState<Place | undefined>(() => placeById(DEMO_HOME_ID))  // default pickup: JCER, Machhe
   const [drop, setDrop] = useState<Place>()
-  const [field, setField] = useState<'pickup' | 'drop' | null>('pickup')
+  const [field, setField] = useState<'pickup' | 'drop' | null>('drop')
   const [cat, setCat] = useState<Cat>('bike')
   const [radius, setRadius] = useState<(typeof RADII)[number]>(2000)
   const [preferWoman, setPreferWomanRaw] = useState(readPref)
+  const [shared, setShared] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const setPreferWoman = (v: boolean) => { setPreferWomanRaw(v); try { sessionStorage.setItem(PREF_KEY, v ? '1' : '0') } catch { /* private mode */ } }
@@ -148,18 +156,20 @@ export default function RiderPage() {
   const tid = showTracker?.id
   const group = useQuery({
     queryKey: ['ride-group', tid], enabled: !!tid,
-    queryFn: async () => (await supabase.from('trip_group_members').select('trip_groups(status, wait_until)').eq('ride_id', tid!).maybeSingle()).data as { trip_groups: { status: string; wait_until: string | null } | null } | null,
+    queryFn: async () => (await supabase.from('trip_group_members').select('trip_groups(status, wait_until, search_radius_m, shared_requested, is_pool, arrived_at)').eq('ride_id', tid!).maybeSingle()).data as { trip_groups: { status: string; wait_until: string | null; search_radius_m: number; shared_requested: boolean; is_pool: boolean; arrived_at: string | null } | null } | null,
   })
   const events = useQuery({
     queryKey: ['ride-events', tid], enabled: !!tid,
     queryFn: async () => ((await supabase.from('ride_events').select('id, type, at, payload').eq('ride_id', tid!).order('id', { ascending: false }).limit(12)).data ?? []) as Ev[],
   })
-  useLive('ride_events', [['ride-events', tid]], tid ? `ride_id=eq.${tid}` : 'ride_id=eq.00000000-0000-0000-0000-000000000000')
+  useLive('ride_events', [['ride-events', tid], ['ride-group', tid]], tid ? `ride_id=eq.${tid}` : 'ride_id=eq.00000000-0000-0000-0000-000000000000')
   // After a match: the assigned captain's precise row. The database only returns it to this rider, during the trip.
   const captain = useQuery({
     queryKey: ['captain', captainId], enabled: !!captainId && trackingLive,
     queryFn: async () => (await supabase.from('driver_profiles').select('user_id, lat, lng, vehicle_category, vehicle_label, plate, location_updated_at, location_source').eq('user_id', captainId!).maybeSingle()).data as Captain | null,
   })
+  const demo = useQuery({ queryKey: ['rider-settings'], staleTime: 60_000, queryFn: async () => (await supabase.from('settings').select('sim_step_s, max_attempts, fast_demo').single()).data as { sim_step_s: number; max_attempts: number; fast_demo: boolean } | null })
+  const traffic = useTraffic()
   const captainName = useQuery({
     queryKey: ['captain-name', captainId], enabled: !!captainId,
     queryFn: async () => (await supabase.from('profiles').select('display_name').eq('id', captainId!).maybeSingle()).data?.display_name as string | undefined,
@@ -170,15 +180,24 @@ export default function RiderPage() {
   })
   useLive('driver_profiles', [['captain', captainId]], captainId ? `user_id=eq.${captainId}` : 'user_id=eq.00000000-0000-0000-0000-000000000000')
 
-  const chosen = estimate.data?.categories.find((c) => c.category === cat && c.drivers > 0) ?? estimate.data?.categories.find((c) => c.drivers > 0)
+  // The passenger's choice is authoritative: never substitute another category.
+  const chosen = estimate.data?.categories.find((c) => c.category === cat)
+  const alternatives = chosen && chosen.drivers === 0 ? estimate.data!.categories.filter((c) => c.drivers > 0) : []
   const nextRadius = RADII.find((r) => r > radius)
   const refreshRide = () => { qc.invalidateQueries({ queryKey: ['rides', uid] }); qc.invalidateQueries({ queryKey: ['ride-group'] }); qc.invalidateQueries({ queryKey: ['ride-events'] }) }
 
   const request = useMutation({
-    mutationFn: () => rpc('request_ride', { p_pickup_label: pickup!.name === 'Current location' || pickup!.name === 'Pinned location' ? `${pickup!.name} (${pickup!.area})` : pickup!.name,
+    mutationFn: () => shared && chosen?.category === 'cab' ? rpc('request_shared_ride', { p_pickup_label: pickupLabel(pickup!), p_lat: pickup!.lat, p_lng: pickup!.lng,
+      p_drop_label: drop!.name, d_lat: drop!.lat, d_lng: drop!.lng, p_radius_m: radius, p_prefer_woman: preferWoman })
+      : rpc('request_ride', { p_pickup_label: pickup!.name === 'Current location' || pickup!.name === 'Pinned location' ? `${pickup!.name} (${pickup!.area})` : pickup!.name,
       p_lat: pickup!.lat, p_lng: pickup!.lng, p_drop_label: drop!.name, d_lat: drop!.lat, d_lng: drop!.lng, p_category: chosen!.category, p_radius_m: radius,
       p_prefer_woman: preferWoman }),
     onSuccess: refreshRide,
+    onError: (e) => toast.error(friendly(e.message)),
+  })
+  const corider = useMutation({
+    mutationFn: (id: string) => rpc<{ paired: boolean }>('demo_add_corider', { p_ride: id }),
+    onSuccess: (r) => { toast(r.paired ? 'A simulated co-rider joined: your fare is now split.' : 'The simulated co-rider is searching too; you are paired if your routes fit.'); refreshRide() },
     onError: (e) => toast.error(friendly(e.message)),
   })
   const cancel = useMutation({
@@ -187,7 +206,7 @@ export default function RiderPage() {
     onError: (e) => toast.error(friendly(e.message)),
   })
   const retry = useMutation({
-    mutationFn: ({ id, dropPref }: { id: string; dropPref: boolean }) => rpc('retry_ride', { p_ride: id, p_drop_preference: dropPref }),
+    mutationFn: ({ id, dropPref, radius }: { id: string; dropPref: boolean; radius?: number }) => rpc('retry_ride', { p_ride: id, p_drop_preference: dropPref, p_radius_m: radius ?? null }),
     onSuccess: (_d, v) => { if (v.dropPref) setPreferWoman(false); refreshRide() },
     onError: (e) => toast.error(friendly(e.message)),
   })
@@ -195,8 +214,14 @@ export default function RiderPage() {
   const useMyLocation = async () => {
     const f = await geo.request()
     if (!f) return
-    if (!inDemoArea(f.lat, f.lng)) { toast.error("You're outside the Belagavi demo area. Choose a pickup from the list."); return }
-    setPickup(pointPlace(f.lat, f.lng, 'gps')); setField(drop ? null : 'drop')
+    // A precise fix inside Belagavi is used as is. A coarse fix (desktop Wi-Fi) or one outside the demo area falls back to
+    // the demo's home location, JCER Machhe, and says so.
+    if (!inDemoArea(f.lat, f.lng) || f.accuracy > GOOD_ACCURACY_M * 3) {
+      const home = placeById(DEMO_HOME_ID)
+      setPickup({ ...home, id: `gps-demo-${home.id}`, name: 'Current location (JCER, Machhe)', area: 'Demo location · your fix was too coarse' })
+      toast(`Your location fix was ${inDemoArea(f.lat, f.lng) ? `±${Math.round(f.accuracy)} m` : 'outside Belagavi'}, so pickup is set to JCER, Machhe. Tap the map to adjust.`)
+    } else setPickup(pointPlace(f.lat, f.lng, 'gps'))
+    setField(drop ? null : 'drop')
   }
   const pick = (p: Place) => {
     if (field === 'pickup') { setPickup(p); setField(drop ? null : 'drop') } else { setDrop(p); setField(pickup ? null : 'pickup') }
@@ -209,8 +234,21 @@ export default function RiderPage() {
   const route = pins.length === 2 ? pins.map((p) => [p.lat, p.lng] as [number, number]) : undefined
   const c = captain.data
   const mapDrivers: MapDriver[] = showTracker
-    ? (c && trackingLive ? [{ id: c.user_id, lat: c.lat, lng: c.lng, label: captainName.data ?? 'Your captain', category: c.vehicle_category, highlight: true }] : [])
+    ? []   // the assigned captain is drawn as the moving vehicle
     : approxMarkers(estimate.data?.markers ?? availability.data?.markers)
+  // The captain drives along the road: to the pickup (accepted/arriving), then pickup -> drop (ongoing).
+  // SIMULATED captains advance one stage every settings.sim_step_s on the server, so their glide is timed to that clock;
+  // a real captain's live GPS position is snapped onto the road.
+  const phase = showTracker && c && trackingLive ? (showTracker.status === 'ongoing' ? 'trip' : 'approach') : null
+  const phaseKey = phase ? `${showTracker!.id}:${phase}` : ''
+  const approachFrom = useRef<{ key: string; at: [number, number] }>({ key: '', at: [0, 0] })
+  if (phase === 'approach' && c && approachFrom.current.key !== phaseKey) approachFrom.current = { key: phaseKey, at: [c.lat, c.lng] }
+  const step = (demo.data?.sim_step_s ?? 10) * 1000, sim = c?.location_source === 'simulated'
+  const vehicle: MapVehicle | undefined = !phase || !c || !showTracker ? undefined : phase === 'approach'
+    ? { from: approachFrom.current.at, to: [showTracker.pickup_lat, showTracker.pickup_lng], category: c.vehicle_category, label: `${captainName.data ?? 'Your captain'} on the way`,
+        ...(sim ? { start: new Date(showTracker.accepted_at!).getTime(), end: new Date(showTracker.accepted_at!).getTime() + 2 * step } : { live: [c.lat, c.lng] }) }
+    : { from: [showTracker.pickup_lat, showTracker.pickup_lng], to: [showTracker.drop_lat, showTracker.drop_lng], category: c.vehicle_category, label: 'Your trip in progress',
+        ...(sim ? { start: new Date(showTracker.started_at!).getTime(), end: new Date(showTracker.started_at!).getTime() + step } : { live: [c.lat, c.lng] }) }
   const fit = c && showTracker && ['accepted', 'arriving'].includes(showTracker.status)
     ? [[c.lat, c.lng], [showTracker.pickup_lat, showTracker.pickup_lng]] as [number, number][]
     : route ?? (pickup ? [[pickup.lat, pickup.lng] as [number, number]] : undefined)
@@ -220,7 +258,7 @@ export default function RiderPage() {
     <>
       <MapFirstLayout
         mapLabel={trackingLive ? <><span className="size-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />Live trip</> : showTracker ? <><MapPin className="size-3 text-teal-700" aria-hidden />Your trip</> : <><MapPin className="size-3 text-teal-700" aria-hidden />Tap the map to drop a pin</>}
-        map={<MapCanvas drivers={mapDrivers} pins={pins} route={route} fit={fit}
+        map={<MapCanvas drivers={mapDrivers} pins={pins} route={route} fit={fit} zones={traffic} legend={<TrafficLegend />} fitKey={showTracker ? `${showTracker.id}:${showTracker.status}` : undefined} vehicle={vehicle}
           onPick={showTracker ? undefined : (lat, lng) => {
             if (!inDemoArea(lat, lng)) { toast.error('That spot is outside the Belagavi demo area.'); return }
             const p = pointPlace(lat, lng, 'pin')
@@ -235,8 +273,11 @@ export default function RiderPage() {
             <Tracker ride={showTracker} events={events.data ?? []} waiting={!!group.data?.trip_groups?.wait_until && showTracker.status === 'requested'}
               captain={trackingLive ? c ?? undefined : undefined} captainName={captainName.data} safety={safety.data}
               onCancel={() => cancel.mutate(showTracker.id)} cancelling={cancel.isPending}
-              onRetry={(dropPref) => retry.mutate({ id: showTracker.id, dropPref })} retrying={retry.isPending}
-              onReport={() => setReportOpen(true)} onDone={() => { dismiss(showTracker.id); setDrop(undefined); setField('drop'); qc.invalidateQueries({ queryKey: ['rides', uid] }) }} />
+              radius={group.data?.trip_groups?.search_radius_m ?? 2000} arrivedAt={group.data?.trip_groups?.arrived_at ?? null} maxTries={demo.data?.max_attempts ?? 5} fastDemo={!!demo.data?.fast_demo}
+              shared={group.data?.trip_groups ? { requested: group.data.trip_groups.shared_requested, pooled: group.data.trip_groups.is_pool } : undefined}
+              onAddCorider={() => corider.mutate(showTracker.id)} addingCorider={corider.isPending}
+              onRetry={(dropPref, r) => retry.mutate({ id: showTracker.id, dropPref, radius: r })} retrying={retry.isPending}
+              onReport={() => setReportOpen(true)} onDone={() => { dismiss(showTracker.id); setPickup(placeById(DEMO_HOME_ID)); setDrop(undefined); setField('drop'); qc.invalidateQueries({ queryKey: ['rides', uid] }) }} />
           ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 border-b pb-3">
@@ -249,8 +290,9 @@ export default function RiderPage() {
                   hint={pickup?.id.startsWith('gps') && geo.fix ? `±${geo.fix.accuracy} m` : undefined} />
                 <FieldRow kind="drop" place={drop} active={field === 'drop'} onClick={() => setField('drop')} />
                 <button type="button" onClick={() => { setPickup(drop); setDrop(pickup) }} disabled={!pickup || !drop} aria-label="Swap pickup and destination"
-                  className="absolute top-1/2 right-3 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full border bg-white text-slate-600 shadow-sm outline-none hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30">
-                  <ArrowUpDown className="size-4" aria-hidden />
+                  title="Swap pickup and destination"
+                  className="absolute top-1/2 right-3 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-full border-2 border-teal-600 bg-white text-teal-700 shadow-md outline-none hover:bg-teal-50 focus-visible:ring-2 focus-visible:ring-ring disabled:border-slate-200 disabled:text-slate-300">
+                  <ArrowUpDown className="size-5" aria-hidden />
                 </button>
               </div>
 
@@ -302,9 +344,9 @@ export default function RiderPage() {
                     {estimate.data.categories.map((x) => {
                       const Icon = CAT_ICON[x.category], none = x.drivers === 0, on = chosen?.category === x.category
                       return (
-                        <button key={x.category} role="radio" aria-checked={on} disabled={none} onClick={() => setCat(x.category)}
-                          className={cn('flex min-h-[72px] w-full items-center gap-3 rounded-2xl border p-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50',
-                            on ? 'border-teal-600 bg-teal-50/70 ring-2 ring-teal-600/25' : 'border-slate-200 bg-slate-50/60 hover:border-slate-300')}>
+                        <button key={x.category} role="radio" aria-checked={on} onClick={() => setCat(x.category)}
+                          className={cn('flex min-h-[72px] w-full items-center gap-3 rounded-2xl border p-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]',
+                            on ? 'border-teal-600 bg-teal-50/70 ring-2 ring-teal-600/25' : 'border-slate-200 bg-slate-50/60 hover:border-slate-300', none && !on && 'opacity-70')}>
                           <span className={cn('grid size-11 shrink-0 place-items-center rounded-2xl', on ? 'bg-primary text-white shadow-sm' : 'bg-slate-200 text-slate-600')}>
                             <Icon className="size-6" aria-hidden />
                           </span>
@@ -315,7 +357,9 @@ export default function RiderPage() {
                               {x.category === 'bike' && <span className="rounded border border-amber-300 bg-amber-50 px-1 font-mono text-[10px] font-bold text-amber-800" title="Bike taxis need RTA permits in Karnataka; none verified">SIMULATED SERVICE</span>}
                             </span>
                             <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-                              {none ? `None within ${km(radius)}` : <><span className="flex items-center gap-1"><Clock className="size-3" aria-hidden />{Math.ceil(x.pickup_eta_min ?? 0)} min away</span><span aria-hidden>•</span><span>{Math.round(x.trip_min)} min trip</span></>}
+                              <span>{x.drivers} captain{x.drivers === 1 ? '' : 's'} within {km(radius)}</span>
+                              {!none && <><span aria-hidden>•</span><span className="flex items-center gap-1"><Clock className="size-3" aria-hidden />{Math.ceil(x.pickup_eta_min ?? 0)} min away</span></>}
+                              <span aria-hidden>•</span><span>{Math.round(x.trip_min)} min trip</span>
                             </span>
                           </span>
                           <span className="num text-base font-extrabold">{inr(x.fare.total)}</span>
@@ -328,19 +372,42 @@ export default function RiderPage() {
                       Bike taxis need an RTA permit in Karnataka and none could be verified, so bike rides here are a simulated demo service.
                     </p>
                   )}
-                  {nextRadius && (!chosen || chosen.category !== cat) && (
-                    <Button variant="outline" className="w-full" onClick={() => setRadius(nextRadius)}>Search wider: within {km(nextRadius)}</Button>
+                  {chosen && chosen.drivers === 0 && (
+                    <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                      <p>{nextRadius ? `No ${CAT_LABEL[chosen.category]} captains within ${km(radius)}. Search wider, or pick another vehicle yourself.`
+                        : `No eligible ${CAT_LABEL[chosen.category]} drivers found within the configured search area.`}</p>
+                      {alternatives.map((a) => (
+                        <Button key={a.category} variant="outline" size="sm" className="w-full bg-white" onClick={() => setCat(a.category)}>
+                          Choose {CAT_LABEL[a.category]} instead ({a.drivers} nearby)
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {nextRadius && chosen && (
+                    <Button variant="outline" className="w-full" onClick={() => setRadius(nextRadius)}>Search for more {CAT_LABEL[chosen.category]} drivers within {km(nextRadius)}</Button>
                   )}
 
-                  <section aria-labelledby="safety-pref" className="rounded-2xl border bg-surface p-3">
+                  {chosen?.category === 'cab' && (
+                    <label className={cn('flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition-colors', shared ? 'border-sky-300 bg-sky-50' : 'bg-surface')}>
+                      <Users className="mt-0.5 size-5 shrink-0 text-sky-700" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">Share this cab · split the fare</span>
+                        <span className="block text-xs leading-relaxed text-slate-500">
+                          If a rider going your way joins before a captain accepts, you each pay 25% less: about <b className="num">{inr(Math.round(chosen.fare.total * 0.75))}</b> instead of {inr(chosen.fare.total)}. Otherwise you pay the normal fare.
+                        </span>
+                      </span>
+                      <Switch checked={shared} onCheckedChange={setShared} aria-label="Share this cab" className="mt-0.5 data-[state=checked]:bg-sky-600" />
+                    </label>
+                  )}
+                  <section aria-labelledby="safety-pref" className={cn('rounded-2xl border p-3 transition-colors', preferWoman ? 'border-pink-300 bg-pink-50' : 'border-pink-100 bg-pink-50/40')}>
                     <Eyebrow className="mb-2" ><span id="safety-pref">Safety preferences</span></Eyebrow>
                     <label className="flex cursor-pointer items-start gap-3">
-                      <ShieldCheck className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden />
+                      <ShieldCheck className="mt-0.5 size-5 shrink-0 text-pink-600" aria-hidden />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold">Prefer a woman driver</span>
+                        <span className={cn('block text-sm font-semibold', preferWoman && 'text-pink-800')}>Prefer a woman driver</span>
                         <span className="block text-xs leading-relaxed text-slate-500">Request a woman driver for additional comfort. Availability may vary by location and time.</span>
                       </span>
-                      <Switch checked={preferWoman} onCheckedChange={setPreferWoman} aria-label="Prefer a woman driver" className="mt-0.5" />
+                      <Switch checked={preferWoman} onCheckedChange={setPreferWoman} aria-label="Prefer a woman driver" className="mt-0.5 data-[state=checked]:bg-pink-600" />
                     </label>
                   </section>
 
@@ -366,10 +433,10 @@ export default function RiderPage() {
               ))}
 
               {pickup && drop && <ActionBar>
-                <Button size="lg" className="h-13 w-full justify-between rounded-2xl px-5 text-[15px] font-bold shadow-lg shadow-teal-700/25" disabled={!choosing || !chosen || request.isPending} onClick={() => request.mutate()}>
+                <Button size="lg" className="h-13 w-full justify-between rounded-2xl px-5 text-[15px] font-bold shadow-lg shadow-teal-700/25" disabled={!choosing || !chosen || chosen.drivers === 0 || request.isPending} onClick={() => request.mutate()}>
                   <span className="flex items-center gap-2">{request.isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
-                    {chosen && choosing ? `Confirm ${CAT_LABEL[chosen.category]}` : !pickup || !drop ? 'Choose pickup and destination' : estimate.isLoading ? 'Getting prices…' : field ? 'Pick a place to continue' : `No captains within ${km(radius)}`}</span>
-                  {chosen && choosing && <span className="num font-mono font-medium text-teal-100">{inr(chosen.fare.total)}</span>}
+                    {chosen && choosing && chosen.drivers > 0 ? `Confirm ${shared && chosen.category === 'cab' ? 'shared ' : ''}${CAT_LABEL[chosen.category]}` : !pickup || !drop ? 'Choose pickup and destination' : estimate.isLoading ? 'Getting prices…' : field ? 'Pick a place to continue' : `No ${chosen ? CAT_LABEL[chosen.category] : ''} captains within ${km(radius)}`}</span>
+                  {chosen && choosing && chosen.drivers > 0 && <span className="num font-mono font-medium text-teal-100">{inr(chosen.fare.total)}</span>}
                 </Button>
                 <p className="mt-2 text-center text-[11px] text-slate-500" aria-live="polite">
                   {choosing && preferWoman ? 'Woman driver requested. We will ask before matching anyone else.' : choosing ? 'Matched automatically to the best nearby captain.' : 'Pick both places to see live fares.'}
@@ -402,15 +469,20 @@ function FieldRow({ kind, place, active, onClick, hint }: { kind: 'pickup' | 'dr
   )
 }
 
-function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel, cancelling, onRetry, retrying, onReport, onDone }: {
-  ride: RideX; events: Ev[]; waiting: boolean; captain?: Captain; captainName?: string; safety?: SafetySummary
-  onCancel: () => void; cancelling: boolean; onRetry: (dropPref: boolean) => void; retrying: boolean; onReport: () => void; onDone: () => void
+function Tracker({ ride, events, waiting, radius, arrivedAt, maxTries, fastDemo, shared, onAddCorider, addingCorider, captain, captainName, safety, onCancel, cancelling, onRetry, retrying, onReport, onDone }: {
+  ride: RideX; events: Ev[]; waiting: boolean; radius: number; arrivedAt: string | null; maxTries: number; fastDemo: boolean
+  shared?: { requested: boolean; pooled: boolean }; onAddCorider: () => void; addingCorider: boolean; captain?: Captain; captainName?: string; safety?: SafetySummary
+  onCancel: () => void; cancelling: boolean; onRetry: (dropPref: boolean, radius?: number) => void; retrying: boolean; onReport: () => void; onDone: () => void
 }) {
+  const wider = RADII.find((r) => r > radius)
   const searching = ride.status === 'requested' || ride.status === 'offered'
   const live = ['accepted', 'arriving', 'ongoing'].includes(ride.status)
   const eta = ride.est_pickup_min != null && ['accepted', 'arriving'].includes(ride.status) ? Math.ceil(ride.est_pickup_min) : null
   const age = captain?.location_updated_at ? Math.round((Date.now() - new Date(captain.location_updated_at).getTime()) / 1000) : null
-  const msg = riderMessage(ride, events, waiting)
+  const atPickup = ride.status === 'arriving' && !!arrivedAt
+  const msg = atPickup ? { title: 'Your captain has arrived', detail: '' } : riderMessage(ride, events, waiting)
+  // one toast when the captain says they are at the pickup
+  useEffect(() => { if (atPickup) toast.success('Your captain has arrived at the pickup.') }, [atPickup])
   const sl = safetyLabel(safety)
   const RouteCard = (
     <div className="space-y-2 rounded-2xl border bg-surface p-3 text-sm">
@@ -431,22 +503,19 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
           </span>
         )}
         <div className="flex items-center justify-center gap-2"><h1 className="text-lg font-bold">{msg.title}</h1><SimBadge /></div>
-        {ride.attempt_no > 0 && <span className="mt-2 inline-block rounded-full border bg-slate-100 px-3 py-1 font-mono text-xs font-semibold text-teal-800">Attempt {ride.attempt_no}</span>}
-        <p className="mx-auto mt-2 max-w-xs text-xs text-slate-500">
-          {ride.status === 'no_driver_found'
-            ? ride.women_driver_pref ? 'No woman captain is free near your pickup right now. You decide what happens next.' : 'Every nearby captain is busy or declined. You can keep searching.'
-            : waiting ? 'We retry automatically for a few minutes. You can change your mind below.'
-            : 'Matching you with the best captain nearby: closest arrival, balanced workload and where drivers are needed.'}
-        </p>
+        {ride.attempt_no > 0 && !searching && <span className="mt-2 inline-block rounded-full border bg-slate-100 px-3 py-1 font-mono text-xs font-semibold text-teal-800">Attempt {ride.attempt_no}</span>}
+        <p className="mx-auto mt-2 max-w-xs text-xs text-slate-500">{msg.detail}</p>
+        {searching && <LiveSearch since={ride.requested_at} tries={ride.attempt_no} maxTries={maxTries} quick={events.find((e) => e.type === 'offer_created')?.payload as { quick?: boolean; timeout_s?: number } | undefined} />}
       </div>
 
       <div className="space-y-2 rounded-2xl border bg-surface p-3 text-sm">
         <div className="flex items-center justify-between"><span className="font-bold">{CAT_LABEL[ride.category]}</span><span className="num font-mono text-base font-bold text-teal-800">{inr(ride.fare.total)}</span></div>
         <div className="flex items-center gap-2 text-slate-600"><MapPin className="size-4 shrink-0 text-emerald-600" aria-hidden /><span className="truncate">{ride.pickup_label}</span></div>
         <div className="flex items-center gap-2 text-slate-600"><Navigation className="size-4 shrink-0 text-rose-600" aria-hidden /><span className="truncate">{ride.drop_label}</span></div>
-        {ride.women_driver_pref && <Tag tone="brand"><ShieldCheck className="size-3.5" aria-hidden />Woman driver requested</Tag>}
+        {ride.women_driver_pref && <span className="inline-flex items-center gap-1 rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-xs font-semibold text-pink-800"><ShieldCheck className="size-3.5" aria-hidden />Woman driver requested</span>}
       </div>
 
+      {shared?.requested && <SharedStatus ride={ride} pooled={shared.pooled} searching={searching} fastDemo={fastDemo} onAdd={onAddCorider} adding={addingCorider} />}
       {events.length > 0 && <RideTimeline events={events} />}
 
       <ActionBar>
@@ -455,7 +524,10 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
             {ride.women_driver_pref ? <>
               <Button size="lg" className="w-full" disabled={retrying} onClick={() => onRetry(false)}>{retrying ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}Keep waiting for a woman captain</Button>
               <Button size="lg" variant="outline" className="w-full" disabled={retrying} onClick={() => onRetry(true)}>Search all captains instead</Button>
-            </> : <Button size="lg" className="w-full" disabled={retrying} onClick={() => onRetry(false)}>{retrying ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}Keep searching</Button>}
+            </> : <>
+              {wider && <Button size="lg" className="w-full" disabled={retrying} onClick={() => onRetry(false, wider)}>Search for more {CAT_LABEL[ride.category]} drivers within {km(wider)}</Button>}
+              <Button size="lg" variant={wider ? 'outline' : 'default'} className="w-full" disabled={retrying} onClick={() => onRetry(false)}>{retrying ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}Keep searching within {km(radius)}</Button>
+            </>}
             <Button variant="ghost" className="w-full" onClick={onDone}>Change my ride</Button>
           </div>
         ) : (
@@ -474,7 +546,10 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 border-b pb-4" aria-live="polite">
         <div className="min-w-0">
-          <div className="flex items-center gap-2"><h1 className="text-lg font-bold tracking-tight">{ride.status === 'completed' ? "You've arrived" : msg.title}</h1><SimBadge /></div>
+          <div className="flex items-center gap-2">
+            {ride.status === 'completed' && <CheckCircle2 className="size-5 shrink-0 text-emerald-600" aria-hidden />}
+            <h1 className="text-lg font-bold tracking-tight">{ride.status === 'completed' ? 'Ride completed' : msg.title}</h1><SimBadge />
+          </div>
           <p className="mt-0.5 text-xs text-slate-500">
             {ride.status === 'arriving' || ride.status === 'accepted' ? `Meet at ${ride.pickup_label}` : ride.status === 'ongoing' ? `Heading to ${ride.drop_label} (${Math.round(ride.est_trip_min)} min)`
               : ride.status === 'completed' ? `Dropped at ${ride.drop_label}` : 'This ride was cancelled'}
@@ -484,6 +559,22 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
       </div>
 
       {ride.status !== 'cancelled' && <StatusStepper status={ride.status} />}
+
+      {ride.status === 'completed' && (
+        <dl className="grid grid-cols-3 gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3 text-center">
+          <div><dt className="text-[11px] text-slate-500">Distance</dt><dd className="font-mono text-base font-bold num">{Number(ride.est_distance_km).toFixed(1)} km</dd></div>
+          <div><dt className="text-[11px] text-slate-500">Trip time</dt><dd className="font-mono text-base font-bold num">{ride.started_at && ride.completed_at
+            ? `${Math.max(1, Math.round((new Date(ride.completed_at).getTime() - new Date(ride.started_at).getTime()) / 60000))} min` : `${Math.round(ride.est_trip_min)} min`}</dd></div>
+          <div><dt className="text-[11px] text-slate-500">Fare paid</dt><dd className="font-mono text-base font-bold text-teal-800 num">{inr(ride.fare.total)}</dd></div>
+        </dl>
+      )}
+
+      {atPickup && (
+        <p role="status" className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span><b>{captainName ?? 'Your captain'}</b> is waiting at {ride.pickup_label}{captain ? <> · look for <b className="font-mono">{captain.plate}</b></> : null}.</span>
+        </p>
+      )}
 
       {ride.attempt_no > 1 && live && (
         <p className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-800">
@@ -511,6 +602,8 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
               <div><span className="font-semibold">{sl.headline}</span> <span className="text-slate-500">{sl.detail}</span></div>
             </div>
           )}
+          {live && <ContactButton rideId={ride.id} me={ride.rider_id} other={captainName} as="rider" live />}
+          {(live || ride.status === 'completed') && ride.driver_id && <WhyCaptain rideId={ride.id} driverId={ride.driver_id} name={captainName} />}
           {live && (
             <p className="text-[11px] text-slate-500">
               {captain?.location_source === 'simulated' ? 'Live position: simulated captain' : age == null ? 'Live position unavailable'
@@ -524,10 +617,10 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
 
       {ride.status === 'completed' && <SafetyFeedback ride={ride} onReport={onReport} />}
 
-      {ride.status !== 'completed' && (
+      {ride.status !== 'cancelled' && (
         <details className="group rounded-2xl border bg-white px-3">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="font-semibold">Fare · {CAT_LABEL[ride.category]}</span>
+            <span className="font-semibold">{ride.status === 'completed' ? 'Receipt' : 'Fare'} · {CAT_LABEL[ride.category]}</span>
             <span className="flex items-center gap-1 font-semibold num">{inr(ride.fare.total)}<ChevronRight className="size-4 text-slate-400 transition-transform group-open:rotate-90" aria-hidden /></span>
           </summary>
           <div className="pb-3"><FareBreakdown fare={ride.fare} /></div>
@@ -536,7 +629,7 @@ function Tracker({ ride, events, waiting, captain, captainName, safety, onCancel
 
       <ActionBar>
         {ride.status === 'completed' || ride.status === 'cancelled' ? (
-          <Button size="lg" className="w-full" onClick={onDone}>Book another ride</Button>
+          <Button size="lg" className="h-13 w-full rounded-2xl text-[15px] font-bold shadow-lg shadow-teal-700/25" onClick={onDone}><RefreshCw className="size-4" aria-hidden />Book another ride</Button>
         ) : (
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onReport}><ShieldAlert className="size-4 text-rose-600" aria-hidden />Safety concern</Button>
@@ -557,7 +650,7 @@ const EV_TEXT: Record<string, string> = {
   offer_rejected: 'Captain declined', offer_no_response: 'Captain did not respond', offer_cancelled: 'Captain no longer available',
   driver_cancelled: 'Captain cancelled', arrival_delayed: 'Captain delayed', captain_unreachable: 'Captain unreachable',
   still_searching: 'Still searching', search_restarted: 'Search restarted', no_driver_found: 'No captain available',
-  status_arriving: 'Captain on the way', status_ongoing: 'Trip started', status_completed: 'Trip completed', rider_cancelled: 'You cancelled',
+  captain_arrived: 'Captain arrived at pickup', status_arriving: 'Captain on the way', status_ongoing: 'Trip started', status_completed: 'Trip completed', rider_cancelled: 'You cancelled',
 }
 function RideTimeline({ events }: { events: Ev[] }) {
   return (
@@ -732,3 +825,42 @@ function HistorySheet({ open, onOpenChange, rides, phone }: { open: boolean; onO
 const KEY = 'up.dismissed'
 function dismissed(id: string) { try { return (JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]).includes(id) } catch { return false } }
 function dismiss(id: string) { try { localStorage.setItem(KEY, JSON.stringify([id])) } catch { /* private mode */ } }
+
+/** Live search progress: a ticking clock (own state, so only this line re-renders) and how many captains were tried. */
+function LiveSearch({ since, tries, maxTries, quick }: { since: string; tries: number; maxTries: number; quick?: { quick?: boolean; timeout_s?: number } }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
+  const sec = Math.max(0, Math.round((now - new Date(since).getTime()) / 1000))
+  return (
+    <div className="mx-auto mt-3 max-w-xs space-y-2" aria-live="off">
+      <div className="flex items-center justify-center gap-2 text-xs font-semibold">
+        <span className="rounded-full border bg-white px-2.5 py-1 font-mono num">Searching {Math.floor(sec / 60)}:{String(sec % 60).padStart(2, '0')}</span>
+        <span className="rounded-full border bg-teal-50 px-2.5 py-1 font-mono text-teal-800 num">Try {Math.max(1, tries)} of {maxTries}</span>
+      </div>
+      <div className="flex gap-1" aria-label={`${tries} of ${maxTries} captains tried`}>
+        {Array.from({ length: maxTries }, (_, i) => (
+          <span key={i} className={cn('h-1.5 flex-1 rounded-full', i < tries - 1 ? 'bg-slate-400' : i === tries - 1 ? 'bg-teal-600 motion-safe:animate-pulse' : 'bg-slate-200')} />
+        ))}
+      </div>
+      {quick?.quick && <p className="text-[11px] text-amber-800">Busy area: each captain gets {quick.timeout_s ?? 10}s to respond, then we try the next one.</p>}
+    </div>
+  )
+}
+
+/** Shared ride: waiting for a co-rider, or paired with the split fare. */
+function SharedStatus({ ride, pooled, searching, fastDemo, onAdd, adding }: { ride: RideX; pooled: boolean; searching: boolean; fastDemo: boolean; onAdd: () => void; adding: boolean }) {
+  const f = ride.fare as Ride['fare'] & { shared?: boolean; solo_total?: number }
+  return (
+    <div className="space-y-2 rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+      <p className="flex items-start gap-2"><Users className="mt-0.5 size-4 shrink-0" aria-hidden />
+        {pooled && f.shared ? <span>Shared with 1 co-rider · you pay <b className="num">{inr(f.total)}</b> instead of {inr(f.solo_total ?? f.total)} (fare split).</span>
+          : <span>Shared ride: looking for a rider going your way. If nobody joins before a captain accepts, you pay the normal fare.</span>}
+      </p>
+      {!pooled && searching && fastDemo && (
+        <Button variant="outline" size="sm" className="w-full bg-white" disabled={adding} onClick={onAdd}>
+          {adding && <Loader2 className="size-4 animate-spin" aria-hidden />}Add a simulated co-rider (demo)
+        </Button>
+      )}
+    </div>
+  )
+}

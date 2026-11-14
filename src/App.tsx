@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ThemeProvider } from '@/components/theme-provider'
 import { Loader2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider, homeFor, useAuth, type Role } from '@/lib/auth'
@@ -33,6 +34,7 @@ function Home() {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <QueryClientProvider client={qc}>
       <AuthProvider>
         <OfflineBanner />
@@ -50,5 +52,6 @@ export default function App() {
         <Toaster position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
+    </ThemeProvider>
   )
 }

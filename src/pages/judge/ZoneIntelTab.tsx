@@ -46,10 +46,10 @@ export default function ZoneIntelTab() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
-          ['Zones short of captains', `${short.length} of ${d.zones.length}`, short.length ? 'text-rose-700' : 'text-emerald-700'],
-          ['Peak shortages', String(peaks.length), peaks.length ? 'text-amber-700' : 'text-slate-900'],
-          ['Open moves', String(open.length), 'text-teal-800'],
-          ['Simulated clock', clock, 'text-slate-900'],
+          ['Areas needing captains', `${short.length} of ${d.zones.length}`, short.length ? 'text-rose-700' : 'text-emerald-700'],
+          ['Busiest right now', peaks.length ? `${peaks.length} area${peaks.length === 1 ? '' : 's'}` : 'none', peaks.length ? 'text-amber-700' : 'text-slate-900'],
+          ['Captains being moved', String(open.length), 'text-teal-800'],
+          ['Demo time', clock, 'text-slate-900'],
         ].map(([k, v, tone]) => (
           <div key={k} className="rounded-2xl border bg-white p-3 shadow-xs">
             <div className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">{k}</div>
@@ -77,14 +77,31 @@ export default function ZoneIntelTab() {
           <CardHeader className="pb-1">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <CardTitle className="text-sm font-bold">Demand vs supply, next 30 minutes</CardTitle>
-                <CardDescription className="text-xs">Demand = model v2 forecast for the next 30-min bucket + requests waiting now. Supply = free captains with a fresh location + captains en route + captains finishing a trip there.</CardDescription>
+                <CardTitle className="text-sm font-bold">Which areas need captains in the next 30 minutes</CardTitle>
+                <CardDescription className="text-xs">Expected riders (forecast + people waiting now) compared with captains who will be there.</CardDescription>
               </div>
               <SimBadge />
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <table className="rtable w-full min-w-[820px] text-left text-xs">
+            <ul className="divide-y rounded-xl border">
+              {[...d.zones].sort((a, b) => Number(b.shortage) - Number(a.shortage)).map((z) => {
+                const gap = Math.round(Number(z.shortage))
+                return (
+                  <li key={z.zone_id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ background: ZONE_STATE_COLOR[z.state] }} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate font-semibold">{z.name}</span>
+                    <span className="hidden text-xs text-slate-500 sm:inline num">~{Math.round(Number(z.demand_30))} riders · {z.expected_supply} captain{z.expected_supply === 1 ? "" : "s"}</span>
+                    <span className={cn('shrink-0 text-xs font-semibold', z.state === 'undersupplied' ? 'text-rose-700' : z.state === 'oversupplied' ? 'text-emerald-700' : 'text-sky-700')}>
+                      {z.state === 'undersupplied' ? `Needs ${Math.max(1, gap)} more` : z.state === 'oversupplied' ? `${Math.max(1, -gap)} spare` : 'Balanced'}{z.peak ? ' · busy' : ''}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            <details className="mt-3 group">
+              <summary className="cursor-pointer text-xs font-semibold text-teal-800">Show all numbers</summary>
+            <table className="rtable mt-2 w-full min-w-[820px] text-left text-xs">
               <thead><tr className="border-b bg-slate-50/60 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
                 <th className="px-2 py-2.5">Zone</th><th className="px-2">Demand 30 min</th><th className="px-2">Waiting</th><th className="px-2">Free</th><th className="px-2">En route</th>
                 <th className="px-2">Expected supply</th><th className="px-2">Gap</th><th className="px-2">State</th><th className="px-2">Nearest pickup</th><th className="px-2 whitespace-nowrap">Bike · Auto · Cab</th>
@@ -110,6 +127,7 @@ export default function ZoneIntelTab() {
               Undersupplied: gap ≥ 1. Oversupplied: ≥ 2 spare captains. Peak: demand ÷ supply ≥ {d.settings.peak_ratio} with at least 2 requests, worked out from data, not clock hours. Rising: next bucket ≥ 15% above now.
               The forecast is trained on synthetic history (seed 42), not real Belagavi traffic.
             </p>
+            </details>
           </CardContent>
         </Card>
       </div>
@@ -152,6 +170,8 @@ export default function ZoneIntelTab() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-bold">Dispatch policy (live)</CardTitle>
             <CardDescription className="text-xs">Every new request is allocated automatically with this policy. Compare policies on identical requests in the Dispatch Arena.</CardDescription></CardHeader>
           <CardContent className="space-y-3 text-sm">
+            <p className="text-sm text-slate-700">Each request goes to the captain with the best mix of <b>closest arrival</b>, <b>fewest trips today</b>, <b>reliability</b> and <b>longest wait for work</b>.</p>
+            <details><summary className="cursor-pointer text-xs font-semibold text-teal-800">Policy details and switch</summary><div className="mt-2 space-y-3">
             <div role="radiogroup" aria-label="Dispatch policy" className="grid grid-cols-2 gap-1 rounded-xl border bg-slate-100 p-1">
               {([['zone_aware', 'Zone-aware'], ['urban_pulse', 'Score only']] as const).map(([v, l]) => (
                 <button key={v} role="radio" aria-checked={policy === v} onClick={() => set.mutate({ dispatch_policy: v })}
@@ -171,6 +191,7 @@ export default function ZoneIntelTab() {
                 {[0.05, 0.1, 0.15, 0.2, 0.3].map((w) => <option key={w} value={w}>{w.toFixed(2)}</option>)}
               </select>
             </label>
+            </div></details>
             <p className="text-[11px] text-slate-500">Hard filters before any score: vehicle type, online, fresh location, within the rider's 2/3/5 km radius, not busy, not already tried, and the women-driver preference when the rider asked for it.</p>
           </CardContent>
         </Card>

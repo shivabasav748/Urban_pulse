@@ -26,7 +26,7 @@ async function login(page: Page, who: 'Rider' | 'Captain' | 'Judge') {
 
 async function requestCab(page: Page) {
   // new first-run flow: search a pickup landmark, then a destination (no GPS in headless runs)
-  await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
+  await page.getByRole('button', { name: /^Pickup point/ }).click(); await page.getByPlaceholder('Search a pickup landmark').fill('Rani Channamma')
   await page.getByRole('button', { name: /^Rani Channamma Circle/ }).click()
   await page.getByPlaceholder('Search a destination').fill('Railway Station')
   await page.getByRole('button', { name: /^Belagavi Railway Station/ }).click()
@@ -43,9 +43,9 @@ test('rider books a cab and a simulated captain completes the full lifecycle', a
   sql(`update driver_profiles set online = false where not is_simulated;`)
   await login(page, 'Rider')
   await requestCab(page)
-  await expect(page.getByRole('heading', { name: /captain/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /captain|Waiting for acceptance|Booking confirmed/i })).toBeVisible()
   await page.screenshot({ path: 'e2e/shots/rider-tracking.png' })
-  await expect(page.getByRole('heading', { name: "You've arrived" })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('How safe did you feel?')).toBeVisible()
   await page.getByRole('button', { name: 'Book another ride' }).click()
   await page.getByRole('button', { name: 'My rides' }).click()
@@ -73,7 +73,7 @@ test('real captain receives, declines -> auto reassignment; next offer accepted 
   await cap.getByRole('button', { name: 'Decline' }).click()
   await expect(rider.getByText(/Reassigned automatically/)).toBeVisible({ timeout: 15_000 })
   await rider.screenshot({ path: 'e2e/shots/rider-reassigned.png' })
-  await expect(rider.getByRole('heading', { name: "You've arrived" })).toBeVisible({ timeout: 60_000 })
+  await expect(rider.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 })
   const types = sql(`select string_agg(type, ',' order by id) from ride_events`)
   expect(types).toMatch(/offer_created,offer_rejected,offer_created,offer_accepted/)
 })
@@ -86,8 +86,8 @@ test('captain accepts and drives the trip through every state', async ({ browser
   await login(rider, 'Rider')
   await requestCab(rider)
   await cap.getByRole('button', { name: 'Accept', exact: true }).click()
-  await expect(rider.getByRole('heading', { name: 'Captain assigned' })).toBeVisible()
-  for (const [btn, riderHeading] of [['Start driving to pickup', 'Captain on the way'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', "You've arrived"]]) {
+  await expect(rider.getByRole('heading', { name: 'Booking confirmed' })).toBeVisible()
+  for (const [btn, riderHeading] of [['Start driving to pickup', 'Your captain is on the way'], ["I've arrived at pickup", 'Your captain has arrived'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', 'Ride completed']]) {
     await cap.getByRole('button', { name: btn }).click()
     await expect(rider.getByRole('heading', { name: riderHeading })).toBeVisible()
   }

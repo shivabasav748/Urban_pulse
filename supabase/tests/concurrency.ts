@@ -96,13 +96,17 @@ const expectOnly = (msgs: string[], pattern: RegExp, label: string) => msgs.filt
 async function main() {
   const t0 = Date.now()
   const since = new Date().toISOString()
+  // pre-clean only this harness's own riders, left behind if an earlier run was interrupted
+  sql(`delete from ride_events where ride_id in (select r.id from rides r join auth.users u on u.id = r.rider_id where u.email like 'conc%@test.up');
+       delete from rides where rider_id in (select id from auth.users where email like 'conc%@test.up');
+       delete from auth.users where email like 'conc%@test.up';`)
   const captainEmails = ['arjun', 'meera', 'kiran', 'farah', 'vikram', 'lakshmi', 'imran'].map((n) => `${n}@sim.up`)
   const caps = await Promise.all(captainEmails.map((e) => session(e)))
   const capsB = await Promise.all(captainEmails.slice(0, 2).map((e) => session(e))) // second browser tab for the same captains
   const riders = await Promise.all([session('rider@demo.up'), session('rider2@demo.up'), session('rider3@demo.up'),
     session('conc1@test.up', true), session('conc2@test.up', true)])
   const [X, Y] = caps, [X2] = capsB
-  const K = caps[2]  // kiran@sim.up = KA-SIM-003, a SIMULATED demo opt-in
+  const K = caps[3]  // farah@sim.up = KA-SIM-004, a SIMULATED demo opt-in (migration 0014)
   const real = await session('captain1@demo.up'), admin = await session('admin@demo.up')
   const riderB = await session('rider@demo.up') // second tab for rider 0
 
