@@ -34,3 +34,13 @@ from public.rides r
 join public.profiles pr on pr.id = r.rider_id
 left join public.profiles pd on pd.id = r.driver_id
 order by r.requested_at desc;
+
+-- 5. Women captains and their vehicles: captains who opted in to women-driver requests (self-declared; no gender column
+--    exists). Simulated = fictional demo captain whose opt-in comes from the seed.
+select p.display_name as driver, d.vehicle_category as category, d.vehicle_label as vehicle, d.plate,
+       d.online, cp.simulated as demo_opt_in, cp.consented_at::date as opted_in_on
+from public.captain_preferences cp
+join public.driver_profiles d on d.user_id = cp.user_id
+join public.profiles p on p.id = cp.user_id
+where cp.women_riders_optin
+order by d.vehicle_category, d.plate;
