@@ -464,4 +464,18 @@ select pg_temp.check((select count(*) from public.zone_traffic()) = 8 and (selec
 select pg_temp.check((select (payload ? 'quick') and (payload->>'max_attempts')::int = 5 from public.ride_events where type = 'offer_created' order by id desc limit 1),
   'offers record whether the quick (busy-area) timeout applied, and the 5-try limit');
 
+
+-- L6. captain arrived at the pickup: only the trip's captain can say so; the rider sees it (event + arrived_at)
+select pg_temp.clear(); select pg_temp.put(:'s1', 300);
+select set_config('request.jwt.claims', json_build_object('sub', :'r1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+select (public.request_ride('RCC', 15.86723, 74.51172, 'Station', 15.84906, 74.50894, 'cab', 2000, false))->>'ride_id' as l6 \gset
+select pg_temp.check(pg_temp.err(format('select public.captain_arrived(%L)', pg_temp.group_of(:'l6'))) = 'forbidden', 'a rider cannot mark the captain as arrived');
+select set_config('request.jwt.claims', json_build_object('sub', :'s1', 'role', 'authenticated')::text, true);
+select public.respond_offer((select id from public.ride_offers where outcome = 'pending' and driver_id = :'s1'), true);
+select public.captain_arrived(pg_temp.group_of(:'l6'));
+reset role;
+select pg_temp.check((select status = 'arriving' and arrived_at is not null from public.trip_groups where id = pg_temp.group_of(:'l6'))
+  and exists (select 1 from public.ride_events where ride_id = :'l6' and type = 'captain_arrived'), 'the captain marks arrival: the ride shows arriving + arrived, with an event the rider can read');
+
 rollback;

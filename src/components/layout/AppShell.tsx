@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { Car, Loader2, Monitor, Shield, Smartphone, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Brand, SignOutButton, SimBadge } from '@/components/ride/bits'
+import { ModeToggle } from '@/components/mode-toggle'
 import { homeFor, useAuth, type Role } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -56,6 +57,7 @@ export function TopNav({ children }: { children?: ReactNode }) {
             <div className="max-w-40 truncate text-xs font-semibold">{profile?.display_name}</div>
             <div className="max-w-40 truncate font-mono text-[10px] text-slate-500">{session?.user.email}</div>
           </div>
+          <ModeToggle />
           <SignOutButton />
         </div>
       </div>

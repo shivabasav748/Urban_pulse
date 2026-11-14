@@ -156,13 +156,13 @@ export default function RiderPage() {
   const tid = showTracker?.id
   const group = useQuery({
     queryKey: ['ride-group', tid], enabled: !!tid,
-    queryFn: async () => (await supabase.from('trip_group_members').select('trip_groups(status, wait_until, search_radius_m, shared_requested, is_pool)').eq('ride_id', tid!).maybeSingle()).data as { trip_groups: { status: string; wait_until: string | null; search_radius_m: number; shared_requested: boolean; is_pool: boolean } | null } | null,
+    queryFn: async () => (await supabase.from('trip_group_members').select('trip_groups(status, wait_until, search_radius_m, shared_requested, is_pool, arrived_at)').eq('ride_id', tid!).maybeSingle()).data as { trip_groups: { status: string; wait_until: string | null; search_radius_m: number; shared_requested: boolean; is_pool: boolean; arrived_at: string | null } | null } | null,
   })
   const events = useQuery({
     queryKey: ['ride-events', tid], enabled: !!tid,
     queryFn: async () => ((await supabase.from('ride_events').select('id, type, at, payload').eq('ride_id', tid!).order('id', { ascending: false }).limit(12)).data ?? []) as Ev[],
   })
-  useLive('ride_events', [['ride-events', tid]], tid ? `ride_id=eq.${tid}` : 'ride_id=eq.00000000-0000-0000-0000-000000000000')
+  useLive('ride_events', [['ride-events', tid], ['ride-group', tid]], tid ? `ride_id=eq.${tid}` : 'ride_id=eq.00000000-0000-0000-0000-000000000000')
   // After a match: the assigned captain's precise row. The database only returns it to this rider, during the trip.
   const captain = useQuery({
     queryKey: ['captain', captainId], enabled: !!captainId && trackingLive,
@@ -273,7 +273,7 @@ export default function RiderPage() {
             <Tracker ride={showTracker} events={events.data ?? []} waiting={!!group.data?.trip_groups?.wait_until && showTracker.status === 'requested'}
               captain={trackingLive ? c ?? undefined : undefined} captainName={captainName.data} safety={safety.data}
               onCancel={() => cancel.mutate(showTracker.id)} cancelling={cancel.isPending}
-              radius={group.data?.trip_groups?.search_radius_m ?? 2000} maxTries={demo.data?.max_attempts ?? 5} fastDemo={!!demo.data?.fast_demo}
+              radius={group.data?.trip_groups?.search_radius_m ?? 2000} arrivedAt={group.data?.trip_groups?.arrived_at ?? null} maxTries={demo.data?.max_attempts ?? 5} fastDemo={!!demo.data?.fast_demo}
               shared={group.data?.trip_groups ? { requested: group.data.trip_groups.shared_requested, pooled: group.data.trip_groups.is_pool } : undefined}
               onAddCorider={() => corider.mutate(showTracker.id)} addingCorider={corider.isPending}
               onRetry={(dropPref, r) => retry.mutate({ id: showTracker.id, dropPref, radius: r })} retrying={retry.isPending}
@@ -469,8 +469,8 @@ function FieldRow({ kind, place, active, onClick, hint }: { kind: 'pickup' | 'dr
   )
 }
 
-function Tracker({ ride, events, waiting, radius, maxTries, fastDemo, shared, onAddCorider, addingCorider, captain, captainName, safety, onCancel, cancelling, onRetry, retrying, onReport, onDone }: {
-  ride: RideX; events: Ev[]; waiting: boolean; radius: number; maxTries: number; fastDemo: boolean
+function Tracker({ ride, events, waiting, radius, arrivedAt, maxTries, fastDemo, shared, onAddCorider, addingCorider, captain, captainName, safety, onCancel, cancelling, onRetry, retrying, onReport, onDone }: {
+  ride: RideX; events: Ev[]; waiting: boolean; radius: number; arrivedAt: string | null; maxTries: number; fastDemo: boolean
   shared?: { requested: boolean; pooled: boolean }; onAddCorider: () => void; addingCorider: boolean; captain?: Captain; captainName?: string; safety?: SafetySummary
   onCancel: () => void; cancelling: boolean; onRetry: (dropPref: boolean, radius?: number) => void; retrying: boolean; onReport: () => void; onDone: () => void
 }) {
@@ -479,7 +479,10 @@ function Tracker({ ride, events, waiting, radius, maxTries, fastDemo, shared, on
   const live = ['accepted', 'arriving', 'ongoing'].includes(ride.status)
   const eta = ride.est_pickup_min != null && ['accepted', 'arriving'].includes(ride.status) ? Math.ceil(ride.est_pickup_min) : null
   const age = captain?.location_updated_at ? Math.round((Date.now() - new Date(captain.location_updated_at).getTime()) / 1000) : null
-  const msg = riderMessage(ride, events, waiting)
+  const atPickup = ride.status === 'arriving' && !!arrivedAt
+  const msg = atPickup ? { title: 'Your captain has arrived', detail: '' } : riderMessage(ride, events, waiting)
+  // one toast when the captain says they are at the pickup
+  useEffect(() => { if (atPickup) toast.success('Your captain has arrived at the pickup.') }, [atPickup])
   const sl = safetyLabel(safety)
   const RouteCard = (
     <div className="space-y-2 rounded-2xl border bg-surface p-3 text-sm">
@@ -566,6 +569,13 @@ function Tracker({ ride, events, waiting, radius, maxTries, fastDemo, shared, on
         </dl>
       )}
 
+      {atPickup && (
+        <p role="status" className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span><b>{captainName ?? 'Your captain'}</b> is waiting at {ride.pickup_label}{captain ? <> · look for <b className="font-mono">{captain.plate}</b></> : null}.</span>
+        </p>
+      )}
+
       {ride.attempt_no > 1 && live && (
         <p className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-800">
           <RefreshCw className="mt-0.5 size-4 shrink-0" aria-hidden /><span>Reassigned automatically: your first captain became unavailable, so we found you another.</span>
@@ -640,7 +650,7 @@ const EV_TEXT: Record<string, string> = {
   offer_rejected: 'Captain declined', offer_no_response: 'Captain did not respond', offer_cancelled: 'Captain no longer available',
   driver_cancelled: 'Captain cancelled', arrival_delayed: 'Captain delayed', captain_unreachable: 'Captain unreachable',
   still_searching: 'Still searching', search_restarted: 'Search restarted', no_driver_found: 'No captain available',
-  status_arriving: 'Captain on the way', status_ongoing: 'Trip started', status_completed: 'Trip completed', rider_cancelled: 'You cancelled',
+  captain_arrived: 'Captain arrived at pickup', status_arriving: 'Captain on the way', status_ongoing: 'Trip started', status_completed: 'Trip completed', rider_cancelled: 'You cancelled',
 }
 function RideTimeline({ events }: { events: Ev[] }) {
   return (

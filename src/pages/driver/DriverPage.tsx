@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 type Stop = { ride_id: string; type: 'pickup' | 'drop'; label: string; lat: number; lng: number }
 type Offer = { id: string; group_id: string; attempt_no: number; offered_at: string; expires_at: string; score: number; components: { chosen: Record<string, number> }
   summary: { pickup_km: number; pickup_min: number; stops: Stop[]; is_pool: boolean; fare: number; women_driver_pref?: boolean; demo?: boolean } }
-type Group = { id: string; status: RideStatus; stops: Stop[]; is_pool: boolean }
+type Group = { id: string; status: RideStatus; stops: Stop[]; is_pool: boolean; arrived_at: string | null }
 type Me = { online: boolean; lat: number; lng: number; location_updated_at: string | null; location_source: string; vehicle_category: 'bike' | 'auto' | 'cab'
   vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number; idle_since: string | null; is_simulated: boolean }
 type ZoneRow = { zone_id: number; name: string; state: ZoneState; demand_30: number; expected_supply: number; shortage: number; peak: boolean; rising: boolean; km: number; eta_min: number; current: boolean }
@@ -34,7 +34,7 @@ type ZoneView = { physical_zone: number; physical_zone_name: string; op_zone: nu
 
 const NEXT: Partial<Record<RideStatus, { to: RideStatus; label: string; title: string }>> = {
   accepted: { to: 'arriving', label: 'Start driving to pickup', title: 'Head to pickup' },
-  arriving: { to: 'ongoing', label: 'Rider picked up · start trip', title: 'Arrived at pickup' },
+  arriving: { to: 'ongoing', label: 'Rider picked up · start trip', title: 'Driving to pickup' },
   ongoing: { to: 'completed', label: 'Complete trip (confirm drop)', title: 'Navigating to drop' },
 }
 const BLOCKED: Record<string, string> = {
@@ -85,7 +85,7 @@ export default function DriverPage() {
     },
   })
   const offer = useQuery({ queryKey: ['offer', uid], queryFn: async () => (await supabase.from('ride_offers').select('*').eq('driver_id', uid).eq('outcome', 'pending').maybeSingle()).data as Offer | null })
-  const group = useQuery({ queryKey: ['group', uid], queryFn: async () => (await supabase.from('trip_groups').select('id, status, stops, is_pool').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing']).maybeSingle()).data as Group | null })
+  const group = useQuery({ queryKey: ['group', uid], queryFn: async () => (await supabase.from('trip_groups').select('id, status, stops, is_pool, arrived_at').eq('driver_id', uid).in('status', ['accepted', 'arriving', 'ongoing']).maybeSingle()).data as Group | null })
   const history = useQuery({ queryKey: ['dhistory', uid], queryFn: async () => ((await supabase.from('rides').select('*').eq('driver_id', uid).eq('status', 'completed').order('completed_at', { ascending: false }).limit(20)).data ?? []) as Ride[] })
   const tripFare = useQuery({
     queryKey: ['trip-fare', uid, group.data?.id], enabled: !!group.data,
@@ -157,6 +157,8 @@ export default function DriverPage() {
     onSuccess: (_d, a) => { if (a !== 'accept') toast(a === 'ignore' ? 'Ignored. The request went straight to the next captain.' : 'Declined. The request went to the next captain.'); qc.invalidateQueries() },
     onError: onErr,
   })
+  const arrived = useMutation({ mutationFn: () => rpc('captain_arrived', { p_group: group.data!.id }),
+    onSuccess: () => { toast('Your rider has been told you are at the pickup.'); qc.invalidateQueries() }, onError: onErr })
   const advance = useMutation({ mutationFn: (to: RideStatus) => rpc('advance_trip', { p_group: group.data!.id, p_to: to }), onSuccess: () => qc.invalidateQueries(), onError: onErr })
   const cancelTrip = useMutation({ mutationFn: () => rpc('driver_cancel', { p_group: group.data!.id }), onSuccess: () => { toast('Trip released. Your rider is being reassigned.'); qc.invalidateQueries() }, onError: onErr })
 
@@ -271,7 +273,7 @@ export default function DriverPage() {
             <Panel aria-label="Current trip">
               <div className="flex items-start justify-between gap-3 border-b pb-4">
                 <div>
-                  <div className="flex items-center gap-2"><h2 className="text-base font-bold sm:text-lg">{next?.title ?? 'Current trip'}</h2><SimBadge /></div>
+                  <div className="flex items-center gap-2"><h2 className="text-base font-bold sm:text-lg">{g.status === 'arriving' && g.arrived_at ? 'At pickup · rider notified' : next?.title ?? 'Current trip'}</h2><SimBadge /></div>
                   <p className="mt-0.5 text-xs text-slate-500">Passenger: <b className="text-slate-800">{riderName.data ?? '…'}</b>{g.is_pool && ' + 1 co-rider'}</p>
                   <div className="mt-1"><StatusChip status={g.status} short /></div>
                 </div>
@@ -285,15 +287,24 @@ export default function DriverPage() {
                 </p>
               )}
               {tripRide.data && <div className="mt-3"><ContactButton rideId={tripRide.data.id} me={uid} other={riderName.data ?? 'your rider'} as="captain" live /></div>}
+              {g.status === 'arriving' && g.arrived_at && (
+                <p role="status" className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                  <CheckCircle2 className="size-4 shrink-0" aria-hidden />Rider notified at {new Date(g.arrived_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Waiting at the pickup.
+                </p>
+              )}
               <ActionBar>
-                {next && (
-                  <Button size="lg" className={cn('w-full', g.status === 'arriving' && 'bg-emerald-700 hover:bg-emerald-800')} disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
+                {g.status === 'arriving' && !g.arrived_at ? (
+                  <Button size="lg" className="w-full bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-300 dark:hover:bg-emerald-200" disabled={arrived.isPending} onClick={() => arrived.mutate()}>
+                    {arrived.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <MapPinned className="size-4" aria-hidden />}I've arrived at pickup (tell the rider)
+                  </Button>
+                ) : next && (
+                  <Button size="lg" className={cn('w-full', g.status === 'arriving' && 'bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-300 dark:hover:bg-emerald-200')} disabled={advance.isPending} onClick={() => advance.mutate(next.to)}>
                     {advance.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : g.status === 'ongoing' ? <CheckCircle2 className="size-4" aria-hidden /> : <Navigation className="size-4" aria-hidden />}{next.label}
                   </Button>
                 )}
                 {['accepted', 'arriving'].includes(g.status) && (
                   <Button variant="ghost" className="mt-2 w-full text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={cancelTrip.isPending} onClick={() => cancelTrip.mutate()}>
-                    Cancel trip (your rider is reassigned automatically)
+                    {g.status === 'arriving' && g.arrived_at ? 'Rider not here? Cancel trip (rider is reassigned)' : 'Cancel trip (your rider is reassigned automatically)'}
                   </Button>
                 )}
               </ActionBar>

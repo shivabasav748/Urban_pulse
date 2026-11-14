@@ -133,7 +133,7 @@ test('rider gives safety feedback and reports a safety concern; the judge review
   await login(page, 'Rider')
   await route(page, 'Cab')
   await page.getByRole('button', { name: /^Confirm Cab/ }).click()
-  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 })
   await page.getByRole('radio', { name: '4: Safe' }).click()
   await page.getByRole('radio', { name: '5: Very safe' }).first().click()
   await page.getByRole('button', { name: 'Send feedback' }).click()

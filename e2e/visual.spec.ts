@@ -62,7 +62,7 @@ for (const [w, h] of VIEWPORTS) {
       await login(page, 'Rider'); await book(page); await page.getByRole('switch', { name: 'Prefer a woman driver' }).click(); await shot(page, vp, 'rider-pref')
       await page.getByRole('switch', { name: 'Prefer a woman driver' }).click()
       await page.getByRole('button', { name: /^Confirm Cab/ }).click()
-      await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 60_000 }); await shot(page, vp, 'rider-done')
+      await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 }); await shot(page, vp, 'rider-done')
     })
     if (SCREENS.includes('captain')) test(`captain ${vp}`, async ({ page }) => { await login(page, 'Captain'); await expect(page.getByText('Where riders need you')).toBeVisible(); await shot(page, vp, 'captain') })
     if (SCREENS.includes('captain-offer')) test(`captain-offer ${vp}`, async ({ browser }) => {

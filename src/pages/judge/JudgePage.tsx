@@ -93,7 +93,7 @@ export default function JudgePage() {
               <button role="tab" aria-selected={on} aria-controls={`panel-${t.id}`} id={`tab-${t.id}`} onClick={() => setTab(t.id)}
                 className={cn('flex h-10 shrink-0 items-center gap-1.5 rounded-xl text-xs font-semibold', t.main ? 'px-3.5 sm:text-sm' : 'px-2.5 text-[11px] sm:text-xs',
                   'outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  on ? (demo ? 'bg-amber-600 text-white shadow-xs' : 'bg-primary text-white shadow-xs') : demo ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}>
+                  on ? (demo ? 'bg-amber-600 text-white shadow-xs dark:bg-amber-300' : 'bg-primary text-white shadow-xs') : demo ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}>
                 <Icon className="size-3.5" aria-hidden />{t.label}
               </button></span>
             )

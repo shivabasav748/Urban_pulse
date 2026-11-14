@@ -45,7 +45,7 @@ test('rider books a cab and a simulated captain completes the full lifecycle', a
   await requestCab(page)
   await expect(page.getByRole('heading', { name: /captain|Waiting for acceptance|Booking confirmed/i })).toBeVisible()
   await page.screenshot({ path: 'e2e/shots/rider-tracking.png' })
-  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('How safe did you feel?')).toBeVisible()
   await page.getByRole('button', { name: 'Book another ride' }).click()
   await page.getByRole('button', { name: 'My rides' }).click()
@@ -73,7 +73,7 @@ test('real captain receives, declines -> auto reassignment; next offer accepted 
   await cap.getByRole('button', { name: 'Decline' }).click()
   await expect(rider.getByText(/Reassigned automatically/)).toBeVisible({ timeout: 15_000 })
   await rider.screenshot({ path: 'e2e/shots/rider-reassigned.png' })
-  await expect(rider.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 60_000 })
+  await expect(rider.getByRole('heading', { name: 'Ride completed' })).toBeVisible({ timeout: 90_000 })
   const types = sql(`select string_agg(type, ',' order by id) from ride_events`)
   expect(types).toMatch(/offer_created,offer_rejected,offer_created,offer_accepted/)
 })
@@ -87,7 +87,7 @@ test('captain accepts and drives the trip through every state', async ({ browser
   await requestCab(rider)
   await cap.getByRole('button', { name: 'Accept', exact: true }).click()
   await expect(rider.getByRole('heading', { name: 'Booking confirmed' })).toBeVisible()
-  for (const [btn, riderHeading] of [['Start driving to pickup', 'Your captain is on the way'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', 'Ride completed']]) {
+  for (const [btn, riderHeading] of [['Start driving to pickup', 'Your captain is on the way'], ["I've arrived at pickup", 'Your captain has arrived'], ['Rider picked up · start trip', 'On trip'], ['Complete trip', 'Ride completed']]) {
     await cap.getByRole('button', { name: btn }).click()
     await expect(rider.getByRole('heading', { name: riderHeading })).toBeVisible()
   }
