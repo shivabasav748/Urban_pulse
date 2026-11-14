@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowRight, Car, Check, CheckCircle2, Clock, Compass, Loader2, LocateFixed, MapPin, MapPinned, Navigation, Power, ShieldCheck, TrendingUp, Users, Wallet, X } from 'lucide-react'
+import { ArrowRight, Bell, Car, Check, CheckCircle2, Clock, Compass, Loader2, LocateFixed, MapPin, MapPinned, Navigation, Power, ShieldCheck, TrendingUp, Users, Wallet, X } from 'lucide-react'
 import { MapCanvas, TrafficLegend, ZONE_STATE_COLOR, type MapPin as Pin } from '@/components/map/MapCanvas'
 import { ActionBar, MapFirstLayout } from '@/components/layout/AppShell'
 import { CAT_LABEL, Empty, Eyebrow, LoadError, Panel, SimBadge, StatusChip, Tag, friendly } from '@/components/ride/bits'
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 type Stop = { ride_id: string; type: 'pickup' | 'drop'; label: string; lat: number; lng: number }
 type Offer = { id: string; group_id: string; attempt_no: number; offered_at: string; expires_at: string; score: number; components: { chosen: Record<string, number> }
-  summary: { pickup_km: number; pickup_min: number; stops: Stop[]; is_pool: boolean; fare: number; women_driver_pref?: boolean } }
+  summary: { pickup_km: number; pickup_min: number; stops: Stop[]; is_pool: boolean; fare: number; women_driver_pref?: boolean; demo?: boolean } }
 type Group = { id: string; status: RideStatus; stops: Stop[]; is_pool: boolean }
 type Me = { online: boolean; lat: number; lng: number; location_updated_at: string | null; location_source: string; vehicle_category: 'bike' | 'auto' | 'cab'
   vehicle_label: string; plate: string; trips_today: number; offers_received: number; offers_accepted: number; idle_since: string | null; is_simulated: boolean }
@@ -98,6 +98,12 @@ export default function DriverPage() {
       { id: string; rider_id: string; est_distance_km: number; est_trip_min: number } | null })
   const riderName = useQuery({ queryKey: ['rider-name', tripRide.data?.rider_id], enabled: !!tripRide.data,
     queryFn: async () => (await supabase.from('profiles').select('display_name').eq('id', tripRide.data!.rider_id).maybeSingle()).data?.display_name as string | undefined })
+  const fastDemo = useQuery({ queryKey: ['fast-demo'], staleTime: 30_000, queryFn: async () => !!(await supabase.from('settings').select('fast_demo').single()).data?.fast_demo })
+  const testRequest = useMutation({
+    mutationFn: () => rpc('demo_request_for_me'),
+    onSuccess: () => { toast('Test request sent to you (SIMULATED rider).'); qc.invalidateQueries({ queryKey: ['offer', uid] }) },
+    onError: (e) => toast.error(friendly(e.message)),
+  })
   const maxTries = useQuery({ queryKey: ['max-attempts'], staleTime: 60_000, queryFn: async () => (await supabase.from('settings').select('max_attempts').single()).data?.max_attempts as number | undefined })
   const zones = useQuery({ queryKey: ['zone-view', uid], queryFn: () => rpc<ZoneView>('captain_zone_view') })
   const safety = useQuery({ queryKey: ['my-safety', uid], queryFn: () => rpc<SafetySummary>('captain_safety_summary', { p_driver: uid }) })
@@ -251,7 +257,12 @@ export default function DriverPage() {
                   updatedAt={me.data.location_updated_at} error={locError} onManual={() => goOnline('manual')} onRetryGps={() => (online ? setLocMode('gps') : goOnline('gps'))} />
               </div>
             )}
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              {online && !o && !g && !me.data.is_simulated && fastDemo.data ? (
+                <Button variant="outline" size="sm" disabled={testRequest.isPending} onClick={() => testRequest.mutate()}>
+                  {testRequest.isPending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Bell className="size-3.5" aria-hidden />}Send me a test request (demo)
+                </Button>
+              ) : <span />}
               <Button variant="ghost" size="sm" onClick={() => setEarningsOpen(true)}><Wallet className="size-3.5" aria-hidden />Earnings and trips</Button>
             </div>
           </Panel>
@@ -342,15 +353,16 @@ const zoneCentre = (id: number) => ZC[id] ?? ZC[1]
 function OfferCard({ offer: o, maxTries, busy, onRespond }: { offer: Offer; maxTries: number; busy: boolean; onRespond: (a: 'accept' | 'decline' | 'ignore') => void }) {
   const { s, pct } = useSecondsLeft(o.offered_at, o.expires_at)
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[1200] p-3 sm:right-6 sm:bottom-6 sm:left-auto sm:w-[420px] sm:p-0 motion-safe:animate-in motion-safe:slide-in-from-bottom">
-      <div role="alertdialog" aria-labelledby="offer-title" aria-describedby="offer-summary"
+    <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-slate-950/50 p-3 backdrop-blur-[2px] sm:items-center motion-safe:animate-in motion-safe:fade-in">
+      <div className="w-full max-w-[420px] motion-safe:animate-in motion-safe:slide-in-from-bottom-8 sm:motion-safe:zoom-in-95">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="offer-title" aria-describedby="offer-summary"
         className="relative overflow-hidden rounded-3xl border-2 border-teal-600 bg-white p-5 pb-[max(env(safe-area-inset-bottom),20px)] shadow-2xl ring-4 ring-teal-600/15">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-slate-200" aria-hidden>
           <div className={cn('h-full', s <= 5 ? 'bg-rose-600' : 'bg-teal-600')} style={{ width: `${pct}%`, transition: 'width 250ms linear' }} />
         </div>
         <div className="flex items-center justify-between border-b pb-3">
           <div>
-            <div className="flex items-center gap-2"><span id="offer-title" className="text-xs font-bold tracking-wider text-teal-800 uppercase">New {o.summary.is_pool ? 'shared ' : ''}ride request</span><SimBadge /></div>
+            <div className="flex items-center gap-2"><span id="offer-title" className="text-xs font-bold tracking-wider text-teal-800 uppercase">New {o.summary.is_pool ? 'shared ' : ''}ride request</span>{o.summary.demo && <span className="rounded border border-amber-300 bg-amber-50 px-1 font-mono text-[10px] font-bold text-amber-800">TEST REQUEST</span>}<SimBadge /></div>
             <div className="mt-0.5 font-mono text-xs text-slate-500">Attempt {o.attempt_no} of {maxTries}</div>
           </div>
           <div className="flex items-center gap-1.5 rounded-lg border bg-slate-100 px-2.5 py-1" aria-live="off">
@@ -370,9 +382,10 @@ function OfferCard({ offer: o, maxTries, busy, onRespond }: { offer: Offer; maxT
         <div className="mt-4 grid grid-cols-3 gap-2">
           <Button variant="ghost" size="lg" disabled={busy} onClick={() => onRespond('ignore')} title="Skip without declining: goes to the next captain now">Ignore</Button>
           <Button variant="outline" size="lg" disabled={busy} onClick={() => onRespond('decline')}><X className="size-4 text-slate-500" aria-hidden />Decline</Button>
-          <Button size="lg" disabled={busy} onClick={() => onRespond('accept')}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}Accept</Button>
+          <Button size="lg" autoFocus disabled={busy} onClick={() => onRespond('accept')}>{busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}Accept</Button>
         </div>
       </div>
+    </div>
     </div>
   )
 }
